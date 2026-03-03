@@ -1,4 +1,4 @@
-🎓 Attendance & Grades System
+<h1>🎓 Attendance & Grades System</h1>
 
 A full-stack university management system designed to handle student attendance and grading in a secure and efficient way.
 
