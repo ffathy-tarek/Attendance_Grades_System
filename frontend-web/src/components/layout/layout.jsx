@@ -1,14 +1,15 @@
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
+import { Outlet } from "react-router-dom";
 
-const Layout = ({ children }) => {
+const Layout = () => {
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
+    <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar />
       <div style={{ flex: 1 }}>
         <Navbar />
         <div style={{ padding: "20px" }}>
-          {children}
+          <Outlet />
         </div>
       </div>
     </div>
