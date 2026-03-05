@@ -36,9 +36,9 @@ const Subjects = () => {
   const loadSubjects = async () => {
     const snapshot = await getDocs(collection(db, "courses"));
 
-    const list = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    const list = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
     }));
 
     setSubjects(list);
@@ -48,7 +48,7 @@ const Subjects = () => {
     const snapshot = await getDocs(collection(db, "users"));
 
     const list = snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .map((d) => ({ id: d.id, ...d.data() }))
       .filter((u) => u.role === "instructor");
 
     setInstructors(list);
@@ -193,6 +193,92 @@ const Subjects = () => {
           </tbody>
         </table>
       </div>
+
+      {showModal && (
+        <div style={overlayStyle}>
+          <div style={modalStyle}>
+            <h3>{editingSubject ? "Edit Subject" : "Add Subject"}</h3>
+
+            <input
+              style={modalInput}
+              placeholder="Subject Name"
+              value={newSubject.name}
+              onChange={(e) =>
+                setNewSubject({ ...newSubject, name: e.target.value })
+              }
+            />
+
+            <input
+              style={modalInput}
+              placeholder="Subject Code"
+              value={newSubject.code}
+              onChange={(e) =>
+                setNewSubject({ ...newSubject, code: e.target.value })
+              }
+            />
+
+            <select
+              style={modalInput}
+              value={newSubject.level}
+              onChange={(e) =>
+                setNewSubject({ ...newSubject, level: e.target.value })
+              }
+            >
+              <option value="">Select Level</option>
+              <option value="1">Level 1</option>
+              <option value="2">Level 2</option>
+              <option value="3">Level 3</option>
+              <option value="4">Level 4</option>
+            </select>
+
+            <input
+              style={modalInput}
+              placeholder="Department"
+              value={newSubject.department}
+              onChange={(e) =>
+                setNewSubject({ ...newSubject, department: e.target.value })
+              }
+            />
+
+            <input
+              style={modalInput}
+              placeholder="Credit Hours"
+              value={newSubject.creditHours}
+              onChange={(e) =>
+                setNewSubject({ ...newSubject, creditHours: e.target.value })
+              }
+            />
+
+            <select
+              style={modalInput}
+              value={newSubject.instructorId}
+              onChange={(e) =>
+                setNewSubject({
+                  ...newSubject,
+                  instructorId: e.target.value,
+                })
+              }
+            >
+              <option value="">Select Instructor</option>
+              {instructors.map((inst) => (
+                <option key={inst.id} value={inst.id}>
+                  {inst.fullName}
+                </option>
+              ))}
+            </select>
+
+            <div style={{ marginTop: "20px", textAlign: "right" }}>
+              <button style={cancelBtn} onClick={() => setShowModal(false)}>
+                Cancel
+              </button>
+
+              <button style={saveBtn} onClick={handleSave}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -275,6 +361,50 @@ const deleteBtn = {
   color: "white",
   border: "none",
   padding: "6px 12px",
+  borderRadius: "8px",
+};
+
+const overlayStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  width: "100%",
+  height: "100%",
+  background: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+};
+
+const modalStyle = {
+  background: "white",
+  padding: "30px",
+  borderRadius: "12px",
+  width: "400px",
+};
+
+const modalInput = {
+  width: "100%",
+  padding: "10px",
+  marginTop: "10px",
+  borderRadius: "8px",
+  border: "1px solid #CBD5E1",
+};
+
+const cancelBtn = {
+  background: "#94A3B8",
+  color: "white",
+  border: "none",
+  padding: "8px 15px",
+  borderRadius: "8px",
+  marginRight: "10px",
+};
+
+const saveBtn = {
+  background: "#1E3A8A",
+  color: "white",
+  border: "none",
+  padding: "8px 15px",
   borderRadius: "8px",
 };
 
