@@ -61,15 +61,18 @@ const Subjects = () => {
     const instructorNames = (
       sub.instructorIds || (sub.instructorId ? [sub.instructorId] : [])
     )
-      .map((id) => instructors.find((i) => i.id === id)?.fullName)
+      .map((id) => instructors.find((i) => i.id === id)?.fullName || "")
       .join(", ");
 
+    const subjectName = (sub.name || "").toLowerCase();
+    const instructorText = instructorNames.toLowerCase();
+    const searchText = search.toLowerCase();
+
     const matchSearch =
-      sub.name.toLowerCase().includes(search.toLowerCase()) ||
-      instructorNames.toLowerCase().includes(search.toLowerCase());
+      subjectName.includes(searchText) || instructorText.includes(searchText);
 
     const matchLevel =
-      levelFilter === "all" || sub.level?.toString() === levelFilter;
+      levelFilter === "all" || (sub.level || "").toString() === levelFilter;
 
     return matchSearch && matchLevel;
   });
@@ -77,10 +80,17 @@ const Subjects = () => {
   const handleSave = async () => {
     if (!newSubject.name || !newSubject.code) return;
 
+    const subjectData = {
+      ...newSubject,
+      instructorIds: newSubject.instructorIds || [],
+    };
+
+    delete subjectData.instructorId;
+
     if (editingSubject) {
-      await updateDoc(doc(db, "courses", editingSubject.id), newSubject);
+      await updateDoc(doc(db, "courses", editingSubject.id), subjectData);
     } else {
-      await addDoc(collection(db, "courses"), newSubject);
+      await addDoc(collection(db, "courses"), subjectData);
     }
 
     setShowModal(false);
@@ -115,6 +125,14 @@ const Subjects = () => {
           style={addBtn}
           onClick={() => {
             setEditingSubject(null);
+            setNewSubject({
+              name: "",
+              code: "",
+              level: "",
+              creditHours: "",
+              department: "",
+              instructorIds: [],
+            });
             setShowModal(true);
           }}
         >
@@ -124,7 +142,7 @@ const Subjects = () => {
 
       <div style={filterContainer}>
         <input
-          placeholder="Search by name..."
+          placeholder="Search by name or instructor..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={filterInput}
@@ -160,15 +178,15 @@ const Subjects = () => {
           <tbody>
             {filteredSubjects.map((sub) => (
               <tr key={sub.id}>
-                <td style={tdStyle}>{sub.name}</td>
-                <td style={tdStyle}>{sub.code}</td>
+                <td style={tdStyle}>{sub.name || "-"}</td>
+                <td style={tdStyle}>{sub.code || "-"}</td>
 
                 <td style={tdStyle}>
-                  <span style={badgeStyle}>{sub.level}</span>
+                  <span style={badgeStyle}>{sub.level || "-"}</span>
                 </td>
 
-                <td style={tdStyle}>{sub.department}</td>
-                <td style={tdStyle}>{sub.creditHours}</td>
+                <td style={tdStyle}>{sub.department || "-"}</td>
+                <td style={tdStyle}>{sub.creditHours || "-"}</td>
 
                 <td style={tdStyle}>
                   {(
@@ -187,7 +205,18 @@ const Subjects = () => {
                     style={editBtn}
                     onClick={() => {
                       setEditingSubject(sub);
-                      setNewSubject(sub);
+
+                      setNewSubject({
+                        name: sub.name || "",
+                        code: sub.code || "",
+                        level: sub.level || "",
+                        creditHours: sub.creditHours || "",
+                        department: sub.department || "",
+                        instructorIds:
+                          sub.instructorIds ||
+                          (sub.instructorId ? [sub.instructorId] : []),
+                      });
+
                       setShowModal(true);
                     }}
                   >
@@ -277,6 +306,7 @@ const Subjects = () => {
                 const options = [...e.target.selectedOptions].map(
                   (o) => o.value,
                 );
+
                 setNewSubject({
                   ...newSubject,
                   instructorIds: options,
@@ -305,6 +335,8 @@ const Subjects = () => {
     </div>
   );
 };
+
+export default Subjects;
 
 const headerStyle = {
   display: "flex",
@@ -439,5 +471,3 @@ const saveBtn = {
   padding: "8px 15px",
   borderRadius: "8px",
 };
-
-export default Subjects;
