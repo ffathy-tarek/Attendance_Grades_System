@@ -1,20 +1,41 @@
-  import { useRouter } from 'expo-router';
-  import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-  import React, { useState } from 'react';
-  import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-  import { db } from '../firebaseConfig';
+import { useRouter } from 'expo-router';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { db } from '../firebaseConfig';
 
-  export default function AddRequest() {
+export default function AddRequest() {
     const router = useRouter();
     const [role, setRole] = useState('student'); 
     const [name, setName] = useState('');
     const [nationalId, setNationalId] = useState('');
     const [uniCode, setUniCode] = useState('');
     const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
     const submitData = async () => {
-      if (!name || !nationalId || !email) return Alert.alert("Error", "All fields are required!");
+      // 1. التأكد من إدخال جميع البيانات
+      if (!name || !nationalId || !email || !password) {
+        return Alert.alert("Input Error", "All fields are required!");
+      }
+
+      // 2. فحص طول رقم البطاقة
+      if (nationalId.length !== 14) {
+        return Alert.alert("Security Error", "National ID must be exactly 14 digits!");
+      }
+
+      // 3. فحص كود الجامعة إذا كان المتقدم طالباً
+      if (role === 'student' && !uniCode) {
+        return Alert.alert("Input Error", "Please enter your University Code!");
+      }
+
+      // 4. فحص صيغة الإيميل باستخدام Regex
+      const emailRegex = /\S+@\S+\.\S+/;
+      if (!emailRegex.test(email.trim())) {
+        return Alert.alert("Format Error", "Please enter a valid email address!");
+      }
+
       setLoading(true);
       try {
         await addDoc(collection(db, "requests"), {
@@ -22,32 +43,45 @@
           nationalID: nationalId,
           role: role,
           universityCode: role === 'student' ? uniCode : "N/A",
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
+          password: password, 
           status: "pending",
           type: "new_registration",
           createdAt: serverTimestamp()
         });
         setLoading(false);
-        Alert.alert("Success", "Request sent to Admin.");
+        Alert.alert("Success", "Request sent! Wait for Admin approval.");
         router.back();
       } catch (e) {
         setLoading(false);
-        Alert.alert("Error", "Failed to send request.");
+        Alert.alert("Firebase Error", "Failed to send request. Check your connection.");
       }
     };
 
     return (
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.card}>
-          <Text style={styles.title}>New Request</Text>
+          <Text style={styles.title}>Create New Request</Text>
           
           <Text style={styles.label}>Full Name</Text>
-          <TextInput style={styles.input} placeholder="Enter name" placeholderTextColor="#999" onChangeText={setName} />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Enter your name" 
+            placeholderTextColor="#999" 
+            onChangeText={setName} 
+          />
           
-          <Text style={styles.label}>National ID</Text>
-          <TextInput style={styles.input} placeholder="14 digits" placeholderTextColor="#999" keyboardType="numeric" onChangeText={setNationalId} />
+          <Text style={styles.label}>National ID (14 Digits)</Text>
+          <TextInput 
+            style={styles.input} 
+            placeholder="305xxxxxxxxxxx" 
+            placeholderTextColor="#999" 
+            keyboardType="numeric" 
+            maxLength={14} 
+            onChangeText={setNationalId} 
+          />
 
-          <Text style={styles.label}>Register as:</Text>
+          <Text style={styles.label}>Role Selection</Text>
           <View style={styles.roleRow}>
             <TouchableOpacity style={[styles.roleBtn, role === 'student' && styles.activeRole]} onPress={() => setRole('student')}>
               <Text style={[styles.roleText, role === 'student' && styles.activeText]}>Student</Text>
@@ -59,16 +93,38 @@
 
           {role === 'student' && (
             <>
-              <Text style={styles.label}>University Code</Text>
-              <TextInput style={styles.input} placeholder="University Code" placeholderTextColor="#999" keyboardType="numeric" onChangeText={setUniCode} />
+              <Text style={styles.label}>University ID Code</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="Ex: 20210001" 
+                placeholderTextColor="#999" 
+                keyboardType="numeric" 
+                onChangeText={setUniCode} 
+              />
             </>
           )}
 
           <Text style={styles.label}>Email Address</Text>
-          <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#999" onChangeText={setEmail} />
+          <TextInput 
+            style={styles.input} 
+            placeholder={role === 'instructor' ? "name@sci.edu.eg" : "code@std.sci.edu.eg"} 
+            placeholderTextColor="#999" 
+            keyboardType="email-address" 
+            autoCapitalize="none"
+            onChangeText={setEmail} 
+          />
+
+          <Text style={styles.label}>Account Password</Text>
+          <TextInput 
+            style={styles.input} 
+            placeholder="Create a strong password" 
+            placeholderTextColor="#999" 
+            secureTextEntry={true} 
+            onChangeText={setPassword} 
+          />
 
           <TouchableOpacity style={styles.btn} onPress={submitData} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Submit Request</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Send Join Request</Text>}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -76,16 +132,16 @@
   }
 
   const styles = StyleSheet.create({
-    container: { flexGrow: 1, backgroundColor: '#f5f5f5', justifyContent: 'center', padding: 20 },
-    card: { backgroundColor: '#fff', borderRadius: 15, padding: 25, elevation: 5 },
-    title: { fontSize: 22, fontWeight: 'bold', color: '#1a3a8a', marginBottom: 20, textAlign: 'center' },
-    label: { color: '#333', fontWeight: '600', marginBottom: 5, fontSize: 12 },
-    input: { height: 45, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingLeft: 10, marginBottom: 15, color: '#000', backgroundColor: '#fff' },
-    roleRow: { flexDirection: 'row', marginBottom: 20 },
-    roleBtn: { flex: 1, height: 40, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginHorizontal: 5 },
-    activeRole: { backgroundColor: '#1a3a8a' },
-    roleText: { color: '#666', fontWeight: 'bold' },
+    container: { flexGrow: 1, backgroundColor: '#f0f2f5', justifyContent: 'center', padding: 20 },
+    card: { backgroundColor: '#fff', borderRadius: 20, padding: 25, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10 },
+    title: { fontSize: 24, fontWeight: 'bold', color: '#1a3a8a', marginBottom: 25, textAlign: 'center' },
+    label: { color: '#444', fontWeight: 'bold', marginBottom: 8, fontSize: 13, marginLeft: 2 },
+    input: { height: 50, borderWidth: 1.5, borderColor: '#eee', borderRadius: 12, paddingLeft: 15, marginBottom: 20, color: '#000', backgroundColor: '#fafafa' },
+    roleRow: { flexDirection: 'row', marginBottom: 25, gap: 10 },
+    roleBtn: { flex: 1, height: 45, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#eee', borderRadius: 12 },
+    activeRole: { backgroundColor: '#1a3a8a', borderColor: '#1a3a8a' },
+    roleText: { color: '#888', fontWeight: 'bold' },
     activeText: { color: '#fff' },
-    btn: { height: 50, backgroundColor: '#1a3a8a', justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
-    btnText: { color: '#fff', fontWeight: 'bold' }
+    btn: { height: 55, backgroundColor: '#1a3a8a', justifyContent: 'center', alignItems: 'center', borderRadius: 12, marginTop: 10 },
+    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
   });

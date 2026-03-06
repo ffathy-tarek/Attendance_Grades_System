@@ -23,9 +23,19 @@ export default function Dashboard() {
               <Text style={styles.menuItem}>👥 Students</Text>
               <Text style={styles.menuItem}>📅 Attendance</Text>
             </View>
-            <TouchableOpacity style={styles.logoutBtn} onPress={() => router.replace('/')}>
-              <Text style={styles.logoutText}> Logout</Text>
-            </TouchableOpacity>
+
+            <View>
+             <TouchableOpacity style={styles.logoutBtn} onPress={() => router.replace('/')}>
+                <Text style={styles.logoutText}> Logout</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.resetBtn} 
+                onPress={() => router.push('/reset-password')}
+              >
+                <Text style={styles.resetBtnText}>Reset Password</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -51,8 +61,12 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   sideMenu: { width: 160, backgroundColor: '#1a3a8a', padding: 20, justifyContent: 'space-between' },
   menuItem: { color: '#fff', fontSize: 15, marginBottom: 25 },
-  logoutBtn: { borderTopWidth: 1, borderTopColor: '#3d5afe', paddingTop: 20, marginBottom: 20 },
+  logoutBtn: { borderTopWidth: 1, borderTopColor: '#3d5afe', paddingTop: 20, marginBottom: 10 },
   logoutText: { color: '#ff5252', fontWeight: 'bold' },
+  
+  resetBtn: { backgroundColor: '#4a90e2', padding: 10, borderRadius: 8, marginTop: 10 },
+  resetBtnText: { color: '#fff', fontWeight: 'bold', textAlign: 'center', fontSize: 12 },
+  
   content: { flex: 1, padding: 20 },
   statCard: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 15, elevation: 3, borderLeftWidth: 5, borderLeftColor: '#1a3a8a' },
   statNum: { fontSize: 22, fontWeight: 'bold' },
