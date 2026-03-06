@@ -1,0 +1,122 @@
+:root {
+  --color-background: #F8FAFC;
+  --color-primary: #1E3A8A;
+  --color-secondary: #3B82F6;
+  --color-accent: #0EA5E9;
+  --color-text: #0F172A;
+
+  --radius-md: 12px;
+  --shadow-md: 0 10px 25px rgba(0,0,0,0.08);
+  --transition: 0.2s ease-in-out;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Layout */
+.container {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card {
+ background-color: #ffffff;
+  padding: 40px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  width: 350px;
+  text-align: center;
+}
+
+/* Typography */
+.title {
+  margin: 0;
+  color: var(--color-primary);
+}
+
+.subtitle {
+  margin-top: 10px;
+  margin-bottom: 30px;
+  color: #64748B;
+}
+
+/* Inputs */
+.input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border-radius: var(--radius-md);
+  border: 1px solid #94A3B8;
+  background-color: var(--color-background);
+  font-size: 14px;
+  outline: none;
+  transition: var(--transition);
+}
+
+.input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(14,165,233,0.2);
+}
+.input-group {
+  width: 100%;
+  margin-bottom: 15px;
+  text-align: left;
+}
+
+.input-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Button */
+.button {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  cursor: pointer;
+  transition: var(--transition);
+  color: white;
+}
+
+/* Primary */
+.button.primary {
+  background-color: var(--color-primary);
+}
+
+.button.primary:hover {
+  background-color: var(--color-secondary);
+}
+
+/* Secondary */
+.button.secondary {
+  background-color: var(--color-accent);
+}
+
+.button.secondary:hover {
+  opacity: 0.9;
+}
+
+.button:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 400px) {
+  .card {
+    width: 90%;
+    padding: 25px;
+  }
+}
