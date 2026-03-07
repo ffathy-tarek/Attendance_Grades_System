@@ -11,6 +11,7 @@ import {
   updateDoc
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 
 const Students = () => {
   const [students, setStudents] = useState([]);
@@ -19,6 +20,7 @@ const Students = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const auth = getAuth();
 
   const [newStudent, setNewStudent] = useState({
     fullName: "",
@@ -33,57 +35,36 @@ const Students = () => {
   const [selectedSubject, setSelectedSubject] = useState("");
   const [subjects, setSubjects] = useState([]);
 
-  // 🔥 تحميل الطلاب من Firebase (نفس الـ Role اللي في الصورة)
   useEffect(() => {
-    const q = query(
-      collection(db, "users"),
-      where("role", "==", "student")
-    );
-
+    const q = query(collection(db, "users"), where("role", "==", "student"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setStudents(data);
     });
-
     return () => unsubscribe();
   }, []);
 
-  // 🔥 تحميل المواد
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "courses"), (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setSubjects(data);
-      }
-    );
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSubjects(data);
+    });
     return () => unsubscribe();
   }, []);
 
-  // 🔎 Filtering (الحل السحري لظهور الـ 9 طلاب)
   const filteredStudents = students.filter((student) => {
-    // بيبحث في fullName (الجديد) أو name (لو داتا قديمة)
     const nameToSearch = (student.fullName || student.name || "").toLowerCase();
     const matchesSearch = nameToSearch.includes(search.toLowerCase());
-
-    // التأكد من مطابقة Level (academicYear)
-    const matchesLevel = selectedLevel
-      ? Number(student.academicYear) === Number(selectedLevel)
-      : true;
-
+    const matchesLevel = selectedLevel ? Number(student.academicYear) === Number(selectedLevel) : true;
     return matchesSearch && matchesLevel;
   });
 
+  // حساب الإحصائيات (اللي كانت ناقصة)
   const totalStudents = filteredStudents.length;
   const totalDepartments = [
     ...new Set(filteredStudents.map((s) => s.department || "General")),
   ].length;
 
-  // ➕ Add / ✏️ Edit (تعديل مسميات الحقول لتطابق الداتا بيز)
   const handleAddStudent = async () => {
     if (!newStudent.fullName || !newStudent.code) {
         alert("Please fill Name and Code");
@@ -92,6 +73,7 @@ const Students = () => {
 
     try {
       if (editingStudent) {
+        // تحديث بيانات طالب موجود
         const studentRef = doc(db, "users", editingStudent.id);
         await updateDoc(studentRef, {
           fullName: newStudent.fullName,
@@ -100,10 +82,30 @@ const Students = () => {
           academicYear: Number(newStudent.academicYear),
           updatedAt: new Date()
         });
+        alert("Student updated successfully ✅");
       } else {
+        // إضافة طالب جديد
+        if (!newStudent.email) { alert("Email is required!"); return; }
+        
+        try {
+          // محاولة إنشاء حساب جديد
+          const tempPass = Math.random().toString(36).slice(-8) + "S!2026";
+          await createUserWithEmailAndPassword(auth, newStudent.email, tempPass);
+          await sendPasswordResetEmail(auth, newStudent.email);
+        } catch (authError) {
+          // لو الإيميل موجود فعلاً في الـ Auth
+          if (authError.code === 'auth/email-already-in-use') {
+            console.log("User already exists in Auth, sending reset email anyway...");
+            await sendPasswordResetEmail(auth, newStudent.email);
+          } else {
+            throw authError; // لو خطأ تاني غير التكرار يطلعه
+          }
+        }
+
+        // في كل الأحوال (سواء جديد أو موجود في Auth) هنضيف بياناته للـ Firestore
         await addDoc(collection(db, "users"), {
           fullName: newStudent.fullName,
-          email: newStudent.email || "",
+          email: newStudent.email,
           code: newStudent.code,
           department: newStudent.department,
           academicYear: Number(newStudent.academicYear),
@@ -111,15 +113,15 @@ const Students = () => {
           status: "active",
           createdAt: new Date()
         });
+        
+        alert("Student record created and invitation email sent! 📧");
       }
 
       setShowModal(false);
       setEditingStudent(null);
       setNewStudent({ fullName: "", email: "", code: "", academicYear: 1, department: "CS" });
-
     } catch (error) {
-      console.error("Error saving student:", error);
-      alert("Error saving data");
+      alert("Error: " + error.message);
     }
   };
 
@@ -131,11 +133,7 @@ const Students = () => {
   const handleAssignConfirm = async () => {
     if (!selectedSubject) return;
     try {
-      const q = query(
-        collection(db, "enrollments"),
-        where("studentId", "==", selectedStudent.id),
-        where("courseId", "==", selectedSubject)
-      );
+      const q = query(collection(db, "enrollments"), where("studentId", "==", selectedStudent.id), where("courseId", "==", selectedSubject));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         alert("Student already assigned to this subject ⚠");
@@ -149,9 +147,7 @@ const Students = () => {
       alert("Student assigned successfully ✅");
       setAssignModal(false);
       setSelectedSubject("");
-    } catch (error) {
-      console.error("Error assigning student:", error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   return (
@@ -161,19 +157,12 @@ const Students = () => {
           <h2 style={{ margin: 0 }}>Students</h2>
           <p style={{ color: "#64748B", marginTop: "5px" }}>Manage university students</p>
         </div>
-
-        <button
-          style={addBtn}
-          onClick={() => {
-            setEditingStudent(null);
-            setNewStudent({ fullName: "", email: "", code: "", academicYear: 1, department: "CS" });
-            setShowModal(true);
-          }}
-        >
+        <button style={addBtn} onClick={() => { setEditingStudent(null); setNewStudent({ fullName: "", email: "", code: "", academicYear: 1, department: "CS" }); setShowModal(true); }}>
           + Add Student
         </button>
       </div>
 
+      {/* الـ Stats الـ كاملة رجعت هنا */}
       <div style={statsContainer}>
         <div style={statCard}>
           <h3 style={statNumber}>{totalStudents}</h3>
@@ -186,18 +175,8 @@ const Students = () => {
       </div>
 
       <div style={filterContainer}>
-        <input
-          type="text"
-          placeholder="Search by name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={inputStyle}
-        />
-        <select
-          value={selectedLevel}
-          onChange={(e) => setSelectedLevel(e.target.value)}
-          style={inputStyle}
-        >
+        <input type="text" placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} style={inputStyle} />
+        <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} style={inputStyle}>
           <option value="">All Levels</option>
           <option value="1">Level 1</option>
           <option value="2">Level 2</option>
@@ -221,90 +200,40 @@ const Students = () => {
             {filteredStudents.length > 0 ? (
               filteredStudents.map((student) => (
                 <tr key={student.id}>
-                  {/* يقرأ fullName أو name لضمان العرض */}
                   <td style={tdStyle}>{student.fullName || student.name}</td>
                   <td style={tdStyle}>{student.code}</td>
-                  <td style={tdStyle}>
-                    <span style={badgeStyle}>
-                      {student.academicYear}
-                    </span>
-                  </td>
+                  <td style={tdStyle}><span style={badgeStyle}>{student.academicYear}</span></td>
                   <td style={tdStyle}>{student.department}</td>
                   <td style={tdStyle}>
-                    <button
-                      style={editBtn}
-                      onClick={() => {
+                    <button style={editBtn} onClick={() => {
                         setEditingStudent(student);
-                        setNewStudent({
-                            fullName: student.fullName || student.name || "",
-                            email: student.email || "",
-                            code: student.code || "",
-                            academicYear: student.academicYear || 1,
-                            department: student.department || "CS"
-                        });
+                        setNewStudent({ fullName: student.fullName || student.name || "", email: student.email || "", code: student.code || "", academicYear: student.academicYear || 1, department: student.department || "CS" });
                         setShowModal(true);
-                      }}
-                    >
-                      Edit
-                    </button>
+                    }}>Edit</button>
                     <button style={deleteBtn} onClick={() => setConfirmDelete(student)}>Delete</button>
                     <button style={assignBtnStyle} onClick={() => handleAssign(student)}>Assign</button>
                   </td>
                 </tr>
               ))
-            ) : (
-              <tr>
-                <td colSpan="5" style={{ padding: "20px", textAlign: "center" }}>No students found</td>
-              </tr>
-            )}
+            ) : (<tr><td colSpan="5" style={{ padding: "20px", textAlign: "center" }}>No students found</td></tr>)}
           </tbody>
         </table>
       </div>
 
-      {/* Add / Edit Modal */}
       {showModal && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
             <h3>{editingStudent ? "Edit Student" : "Add New Student"}</h3>
-            <input
-              style={modalInput}
-              placeholder="Student Name"
-              value={newStudent.fullName}
-              onChange={(e) => setNewStudent({ ...newStudent, fullName: e.target.value })}
-            />
+            <input style={modalInput} placeholder="Student Name" value={newStudent.fullName} onChange={(e) => setNewStudent({ ...newStudent, fullName: e.target.value })} />
             {!editingStudent && (
-              <input
-                style={modalInput}
-                placeholder="Student Email"
-                value={newStudent.email}
-                onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
-              />
+              <input style={modalInput} placeholder="Student Email" value={newStudent.email} onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })} />
             )}
-            <input
-              style={modalInput}
-              placeholder="Student Code"
-              value={newStudent.code}
-              onChange={(e) => setNewStudent({ ...newStudent, code: e.target.value })}
-            />
-            <select
-              style={modalInput}
-              value={newStudent.academicYear}
-              onChange={(e) => setNewStudent({ ...newStudent, academicYear: Number(e.target.value) })}
-            >
-              <option value={1}>Level 1</option>
-              <option value={2}>Level 2</option>
-              <option value={3}>Level 3</option>
-              <option value={4}>Level 4</option>
+            <input style={modalInput} placeholder="Student Code" value={newStudent.code} onChange={(e) => setNewStudent({ ...newStudent, code: e.target.value })} />
+            <select style={modalInput} value={newStudent.academicYear} onChange={(e) => setNewStudent({ ...newStudent, academicYear: Number(e.target.value) })}>
+              <option value={1}>Level 1</option><option value={2}>Level 2</option><option value={3}>Level 3</option><option value={4}>Level 4</option>
             </select>
-            <select
-              style={modalInput}
-              value={newStudent.department}
-              onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })}
-            >
-              <option value="CS">CS</option>
-              <option value="IS">IS</option>
-              <option value="CHEMISTRY">CHEMISTRY</option>
-              <option value="MATHIMATICS">MATHIMATICS</option>
+            <select style={modalInput} value={newStudent.department} onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })}>
+              <option value="CS">CS</option><option value="IS">IS</option><option value="CHEMISTRY">CHEMISTRY</option><option value="MATHIMATICS">MATHIMATICS</option>
             </select>
             <div style={{ textAlign: "right", marginTop: "15px" }}>
               <button style={cancelBtn} onClick={() => { setShowModal(false); setEditingStudent(null); }}>Cancel</button>
@@ -314,7 +243,6 @@ const Students = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       {confirmDelete && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
@@ -323,26 +251,20 @@ const Students = () => {
             <div style={{ textAlign: "right", marginTop: "20px" }}>
               <button style={cancelBtn} onClick={() => setConfirmDelete(null)}>Cancel</button>
               <button style={deleteBtn} onClick={async () => {
-                try {
-                  await deleteDoc(doc(db, "users", confirmDelete.id));
-                  setConfirmDelete(null);
-                } catch (error) { console.error(error); }
+                  try { await deleteDoc(doc(db, "users", confirmDelete.id)); setConfirmDelete(null); } catch (error) { console.error(error); }
               }}>Yes, Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Assign Modal */}
       {assignModal && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
             <h3>Assign Subject</h3>
             <select style={modalInput} value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
               <option value="">Select Subject</option>
-              {subjects.map((sub) => (
-                <option key={sub.id} value={sub.id}>{sub.name}</option>
-              ))}
+              {subjects.map((sub) => (<option key={sub.id} value={sub.id}>{sub.name}</option>))}
             </select>
             <div style={{ textAlign: "right", marginTop: "15px" }}>
               <button style={cancelBtn} onClick={() => setAssignModal(false)}>Cancel</button>
@@ -355,7 +277,7 @@ const Students = () => {
   );
 };
 
-/* ======= Styles ======= */
+// الـ Styles زي ما هي بدون تغيير
 const headerStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px" };
 const addBtn = { backgroundColor: "#1E3A8A", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer" };
 const statsContainer = { display: "flex", gap: "20px", marginBottom: "30px" };
