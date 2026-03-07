@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
 import { db } from "../../firebase"; 
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 
 function PendingAccounts() {
   const [pendingAccounts, setPendingAccounts] = useState([]);
@@ -11,8 +11,8 @@ function PendingAccounts() {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [studentDetails, setStudentDetails] = useState({
-    academicYear: "", // خليناها فاضية عشان تختار بنفسك
-    department: ""   // خليناها فاضية عشان تختار بنفسك
+    academicYear: "", 
+    department: ""   
   });
 
   useEffect(() => {
@@ -26,31 +26,40 @@ function PendingAccounts() {
 
   const handleOpenApproveModal = (account) => {
     setSelectedAccount(account);
-    setStudentDetails({ academicYear: "", department: "" }); // تصفير الاختيارات عند كل فتح
+    setStudentDetails({ academicYear: "", department: "" }); 
     setShowApproveModal(true);
   };
 
   const confirmApprove = async () => {
-    // التأكد إن الأدمن اختار ليفل وقسم
     if (!studentDetails.academicYear || !studentDetails.department) {
       alert("Please select both Academic Level and Department!");
       return;
     }
 
     try {
-      // 1. إنشاء الحساب في Firebase Auth
-      await createUserWithEmailAndPassword(auth, selectedAccount.email, "TempPass123!");
+      // 1. إنشاء الحساب أو التعامل مع الحساب الموجود مسبقاً
+      const tempPassword = "Student@2026"; // باسوورد مؤقتة يقدر يدخل بيها فوراً
+      
+      try {
+        await createUserWithEmailAndPassword(auth, selectedAccount.email, tempPassword);
+      } catch (authError) {
+        // لو الحساب موجود في الـ Auth (اللي كانت بتعمل Error)، هنكمل عادي
+        if (authError.code !== 'auth/email-already-in-use') throw authError;
+      }
 
-      // 2. تحديث حالة الطلب لـ approved
+      // 2. إرسال إيميل إعادة تعيين الباسوورد (اختياري للطالب)
+      await sendPasswordResetEmail(auth, selectedAccount.email);
+
+      // 3. تحديث حالة الطلب في Firestore
       await updateDoc(doc(db, "emailRequests", selectedAccount.id), {
         status: "approved"
       });
 
-      // 3. إضافة المستخدم للـ users
+      // 4. إضافة بيانات الطالب للـ Firestore (المهمة للعرض في الجدول)
       await addDoc(collection(db, "users"), {
         fullName: selectedAccount.name || selectedAccount.fullName,
         email: selectedAccount.email,
-        code: selectedAccount.code || "N/A", // بياخد الكود اللي الطالب بعته أصلاً
+        code: selectedAccount.code || "N/A",
         role: "student",
         academicYear: Number(studentDetails.academicYear),
         department: studentDetails.department,
@@ -58,10 +67,11 @@ function PendingAccounts() {
         createdAt: new Date(),
       });
 
-      alert(`Account for ${selectedAccount.name} approved successfully! ✅`);
+      alert(`Success! Student can now login with password: ${tempPassword}`);
       setShowApproveModal(false);
       setSelectedAccount(null);
     } catch (error) {
+      console.error(error);
       alert("Error: " + error.message);
     }
   };
@@ -104,7 +114,7 @@ function PendingAccounts() {
           <tbody>
             {pendingAccounts.map((account) => (
               <tr key={account.id}>
-                <td style={tdStyle}>{account.name}</td>
+                <td style={tdStyle}>{account.name || account.fullName}</td>
                 <td style={tdStyle}>{account.email}</td>
                 <td style={tdStyle}>{account.role}</td>
                 <td style={{ ...tdStyle, textAlign: "center" }}>
