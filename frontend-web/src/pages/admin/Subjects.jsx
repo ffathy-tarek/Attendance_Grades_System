@@ -78,19 +78,15 @@ const Subjects = () => {
   });
 
   const handleSave = async () => {
-    if (!newSubject.name || !newSubject.code) return;
-
-    const subjectData = {
-      ...newSubject,
-      instructorIds: newSubject.instructorIds || [],
-    };
-
-    delete subjectData.instructorId;
+    if (!newSubject.name || !newSubject.code) {
+      alert("Please fill name and code");
+      return;
+    }
 
     if (editingSubject) {
-      await updateDoc(doc(db, "courses", editingSubject.id), subjectData);
+      await updateDoc(doc(db, "courses", editingSubject.id), newSubject);
     } else {
-      await addDoc(collection(db, "courses"), subjectData);
+      await addDoc(collection(db, "courses"), newSubject);
     }
 
     setShowModal(false);
@@ -109,49 +105,46 @@ const Subjects = () => {
   };
 
   const deleteSubject = async (id) => {
-    await deleteDoc(doc(db, "courses", id));
-    loadSubjects();
+    if (window.confirm("Are you sure you want to delete this subject?")) {
+      await deleteDoc(doc(db, "courses", id));
+      loadSubjects();
+    }
+  };
+
+  const openEditModal = (subject) => {
+    setEditingSubject(subject);
+    setNewSubject(subject);
+    setShowModal(true);
   };
 
   return (
     <div style={{ padding: "30px" }}>
       <div style={headerStyle}>
-        <div>
-          <h2>Subjects</h2>
-          <p style={{ color: "#64748B" }}>Manage university subjects</p>
-        </div>
+        <h2>Subjects Management</h2>
 
         <button
           style={addBtn}
           onClick={() => {
             setEditingSubject(null);
-            setNewSubject({
-              name: "",
-              code: "",
-              level: "",
-              creditHours: "",
-              department: "",
-              instructorIds: [],
-            });
             setShowModal(true);
           }}
         >
-          + Add Subject
+          Add Subject
         </button>
       </div>
 
-      <div style={filterContainer}>
+      <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
         <input
-          placeholder="Search by name or instructor..."
+          style={inputStyle}
+          placeholder="Search subject or instructor"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={filterInput}
         />
 
         <select
+          style={inputStyle}
           value={levelFilter}
           onChange={(e) => setLevelFilter(e.target.value)}
-          style={filterSelect}
         >
           <option value="all">All Levels</option>
           <option value="1">Level 1</option>
@@ -170,69 +163,41 @@ const Subjects = () => {
               <th style={thStyle}>Level</th>
               <th style={thStyle}>Department</th>
               <th style={thStyle}>Credit Hours</th>
-              <th style={thStyle}>Instructor</th>
               <th style={thStyle}>Actions</th>
             </tr>
           </thead>
 
           <tbody>
-            {filteredSubjects.map((sub) => (
-              <tr key={sub.id}>
-                <td style={tdStyle}>{sub.name || "-"}</td>
-                <td style={tdStyle}>{sub.code || "-"}</td>
-
+            {filteredSubjects.map((subject) => (
+              <tr key={subject.id}>
+                <td style={tdStyle}>{subject.name}</td>
+                <td style={tdStyle}>{subject.code}</td>
                 <td style={tdStyle}>
-                  <span style={badgeStyle}>{sub.level || "-"}</span>
+                  <span style={badgeStyle}>{subject.level}</span>
                 </td>
-
-                <td style={tdStyle}>{sub.department || "-"}</td>
-                <td style={tdStyle}>{sub.creditHours || "-"}</td>
-
-                <td style={tdStyle}>
-                  {(
-                    sub.instructorIds ||
-                    (sub.instructorId ? [sub.instructorId] : [])
-                  )
-                    .map(
-                      (id) =>
-                        instructors.find((i) => i.id === id)?.fullName || "",
-                    )
-                    .join(", ") || "-"}
-                </td>
+                <td style={tdStyle}>{subject.department}</td>
+                <td style={tdStyle}>{subject.creditHours}</td>
 
                 <td style={tdStyle}>
                   <button
                     style={editBtn}
-                    onClick={() => {
-                      setEditingSubject(sub);
-
-                      setNewSubject({
-                        name: sub.name || "",
-                        code: sub.code || "",
-                        level: sub.level || "",
-                        creditHours: sub.creditHours || "",
-                        department: sub.department || "",
-                        instructorIds:
-                          sub.instructorIds ||
-                          (sub.instructorId ? [sub.instructorId] : []),
-                      });
-
-                      setShowModal(true);
-                    }}
+                    onClick={() => openEditModal(subject)}
                   >
                     Edit
                   </button>
 
                   <button
                     style={deleteBtn}
-                    onClick={() => deleteSubject(sub.id)}
+                    onClick={() => deleteSubject(subject.id)}
                   >
                     Delete
                   </button>
 
                   <button
                     style={viewBtn}
-                    onClick={() => navigate(`/subjects/${sub.id}/students`)}
+                    onClick={() =>
+                      navigate(`/admin/subject-students/${subject.id}`)
+                    }
                   >
                     View Students
                   </button>
@@ -259,33 +224,19 @@ const Subjects = () => {
 
             <input
               style={modalInput}
-              placeholder="Subject Code"
+              placeholder="Code"
               value={newSubject.code}
               onChange={(e) =>
                 setNewSubject({ ...newSubject, code: e.target.value })
               }
             />
 
-            <select
+            <input
               style={modalInput}
+              placeholder="Level"
               value={newSubject.level}
               onChange={(e) =>
                 setNewSubject({ ...newSubject, level: e.target.value })
-              }
-            >
-              <option value="">Select Level</option>
-              <option value="1">Level 1</option>
-              <option value="2">Level 2</option>
-              <option value="3">Level 3</option>
-              <option value="4">Level 4</option>
-            </select>
-
-            <input
-              style={modalInput}
-              placeholder="Department"
-              value={newSubject.department}
-              onChange={(e) =>
-                setNewSubject({ ...newSubject, department: e.target.value })
               }
             />
 
@@ -294,33 +245,26 @@ const Subjects = () => {
               placeholder="Credit Hours"
               value={newSubject.creditHours}
               onChange={(e) =>
-                setNewSubject({ ...newSubject, creditHours: e.target.value })
+                setNewSubject({
+                  ...newSubject,
+                  creditHours: e.target.value,
+                })
               }
             />
 
-            <select
-              multiple
+            <input
               style={modalInput}
-              value={newSubject.instructorIds}
-              onChange={(e) => {
-                const options = [...e.target.selectedOptions].map(
-                  (o) => o.value,
-                );
-
+              placeholder="Department"
+              value={newSubject.department}
+              onChange={(e) =>
                 setNewSubject({
                   ...newSubject,
-                  instructorIds: options,
-                });
-              }}
-            >
-              {instructors.map((inst) => (
-                <option key={inst.id} value={inst.id}>
-                  {inst.fullName}
-                </option>
-              ))}
-            </select>
+                  department: e.target.value,
+                })
+              }
+            />
 
-            <div style={{ marginTop: "20px", textAlign: "right" }}>
+            <div style={{ marginTop: "15px", textAlign: "right" }}>
               <button style={cancelBtn} onClick={() => setShowModal(false)}>
                 Cancel
               </button>
@@ -336,7 +280,7 @@ const Subjects = () => {
   );
 };
 
-export default Subjects;
+/* ===== Styles ===== */
 
 const headerStyle = {
   display: "flex",
@@ -348,28 +292,16 @@ const addBtn = {
   background: "#1E3A8A",
   color: "white",
   border: "none",
-  padding: "10px 20px",
+  padding: "10px 15px",
   borderRadius: "8px",
+  cursor: "pointer",
 };
 
-const filterContainer = {
-  display: "flex",
-  gap: "15px",
-  marginBottom: "20px",
-};
-
-const filterInput = {
+const inputStyle = {
   padding: "10px",
   borderRadius: "8px",
   border: "1px solid #CBD5E1",
-  width: "220px",
-};
-
-const filterSelect = {
-  padding: "10px",
-  borderRadius: "8px",
-  border: "1px solid #CBD5E1",
-  width: "160px",
+  width: "200px",
 };
 
 const cardStyle = {
@@ -471,3 +403,5 @@ const saveBtn = {
   padding: "8px 15px",
   borderRadius: "8px",
 };
+
+export default Subjects;
