@@ -1,13 +1,10 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { auth } from "../../firebase";
-import {
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  updatePassword,
-  signOut,
-} from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { FiLogOut, FiLock } from "react-icons/fi";
+// استدعاء الدالة الجينيرال من ملف الخدمات
+import { handleInternalChangePassword } from "../../services/generalResetPassword";
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -27,44 +24,35 @@ const Sidebar = () => {
   };
 
   const handleChangePassword = async () => {
+    // 1. التحققات الأساسية (Validation)
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      alert("Please fill all fields.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert("New passwords do not match.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      alert("Password must be at least 6 characters.");
+      return;
+    }
+
     try {
-      const user = auth.currentUser;
-
-      if (!user) {
-        alert("No authenticated user found.");
-        return;
-      }
-
-      if (!currentPassword || !newPassword || !confirmPassword) {
-        alert("Please fill all fields.");
-        return;
-      }
-
-      if (newPassword !== confirmPassword) {
-        alert("New passwords do not match.");
-        return;
-      }
-
-      if (newPassword.length < 6) {
-        alert("Password must be at least 6 characters.");
-        return;
-      }
-
-      const credential = EmailAuthProvider.credential(
-        user.email,
-        currentPassword
-      );
-
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
+      // 2. استخدام الدالة الجينيرال لتنفيذ عملية التغيير
+      await handleInternalChangePassword(currentPassword, newPassword);
 
       alert("Password updated successfully!");
 
+      // 3. تنظيف الحقول وإغلاق المودال
       setShowModal(false);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (error) {
+      // إظهار رسالة الخطأ القادمة من الفايربيس أو الدالة
       alert(error.message);
     }
   };
@@ -120,7 +108,7 @@ const Sidebar = () => {
       {showModal && (
         <div style={modalOverlay}>
           <div style={modalContent}>
-            <h3>Change Password</h3>
+            <h3 style={{ color: "#333", marginTop: 0 }}>Change Password</h3>
 
             <input
               type="password"
@@ -165,7 +153,7 @@ const Sidebar = () => {
   );
 };
 
-/* ===== Styles ===== */
+/* ===== Styles (مستقرة كما هي بطلبك) ===== */
 
 const sidebarStyle = {
   width: "230px",
@@ -233,6 +221,7 @@ const modalOverlay = {
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
+  zIndex: 1000,
 };
 
 const modalContent = {
@@ -248,6 +237,7 @@ const inputStyle = {
   marginTop: "10px",
   borderRadius: "6px",
   border: "1px solid #ccc",
+  boxSizing: "border-box", // لضمان عدم خروج الإنبوت عن حدود المودال
 };
 
 const saveBtn = {

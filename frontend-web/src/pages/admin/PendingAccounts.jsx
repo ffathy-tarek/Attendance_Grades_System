@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, setDoc, query, where } from "firebase/firestore"; // تم إضافة setDoc هنا
 import { db } from "../../firebase"; 
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 
@@ -25,13 +25,11 @@ function PendingAccounts() {
 
   const handleOpenApproveModal = (account) => {
     setSelectedAccount(account);
-    // ريست للبيانات
     setStudentDetails({ academicYear: "", department: "" }); 
     setShowApproveModal(true);
   };
 
   const confirmApprove = async () => {
-    // التحقق من القسم لكل الفئات، والتحقق من السنة الدراسية للطلاب فقط
     if (!studentDetails.department) {
         alert("Please select a Department!");
         return;
@@ -42,14 +40,23 @@ function PendingAccounts() {
     }
 
     try {
-      // 1. إنشاء الحساب بكلمة مرور مؤقتة تعتمد على نوع المستخدم
+      // 1. إنشاء كلمة مرور مؤقتة
       const tempPassword = selectedAccount.role === "instructor" ? "Doctor@2026" : "Student@2026";
       
+      let userCredential;
       try {
-        await createUserWithEmailAndPassword(auth, selectedAccount.email, tempPassword);
+        // إنشاء الحساب في الـ Authentication
+        userCredential = await createUserWithEmailAndPassword(auth, selectedAccount.email, tempPassword);
       } catch (authError) {
-        if (authError.code !== 'auth/email-already-in-use') throw authError;
+        if (authError.code === 'auth/email-already-in-use') {
+            alert("This email is already registered in Authentication!");
+            return;
+        }
+        throw authError;
       }
+
+      // الحصول على الـ UID الجديد
+      const newUserUID = userCredential.user.uid;
 
       // 2. إرسال إيميل إعادة تعيين الباسوورد
       await sendPasswordResetEmail(auth, selectedAccount.email);
@@ -59,26 +66,26 @@ function PendingAccounts() {
         status: "approved"
       });
 
-      // 4. تجهيز بيانات المستخدم الجديد بناءً على الـ Role
+      // 4. تجهيز بيانات المستخدم الجديد
       const userData = {
         fullName: selectedAccount.name || selectedAccount.fullName,
         email: selectedAccount.email,
-        role: selectedAccount.role, // هيجيب instructor أو student تلقائياً
+        role: selectedAccount.role, 
         status: "active",
         createdAt: new Date(),
         department: studentDetails.department,
+        uid: newUserUID // اختياري لزيادة التأكيد
       };
 
-      // إضافة تفاصيل خاصة بالطالب فقط
       if (selectedAccount.role === "student") {
         userData.code = selectedAccount.code || "N/A";
         userData.academicYear = Number(studentDetails.academicYear);
       }
 
-      // حفظ البيانات في كولكشن الـ users
-      await addDoc(collection(db, "users"), userData);
+      // الخطوة الأهم: استخدام setDoc مع الـ UID كـ Document ID
+      await setDoc(doc(db, "users", newUserUID), userData);
 
-      alert(`Success! ${selectedAccount.role} can now login.`);
+      alert(`Success! ${selectedAccount.role} created with UID: ${newUserUID}`);
       setShowApproveModal(false);
       setSelectedAccount(null);
     } catch (error) {
@@ -94,7 +101,7 @@ function PendingAccounts() {
     } catch (error) { alert(error.message); }
   };
 
-  // ======= الستايلات (بدون تغيير) =======
+  // ======= الستايلات (كما هي في كودك الأصلي) =======
   const tableStyle = { width: "100%", borderCollapse: "collapse", backgroundColor: "#FFFFFF", borderRadius: "10px", overflow: "hidden" };
   const thStyle = { padding: "14px", backgroundColor: "#F1F5F9", color: "#1E3A8A", textAlign: "left" };
   const tdStyle = { padding: "14px", borderTop: "1px solid #E2E8F0", textAlign: "left" };
@@ -153,7 +160,6 @@ function PendingAccounts() {
               Approving: <strong>{selectedAccount?.name}</strong>
             </p>
 
-            {/* لا تظهر السنة الدراسية إلا لو كان المستخدم طالب */}
             {selectedAccount?.role === "student" && (
               <>
                 <label style={labelStyle}>Academic Level</label>

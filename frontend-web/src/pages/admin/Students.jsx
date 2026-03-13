@@ -1,15 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { 
-  addDoc, 
-  collection, 
-  query, 
-  where, 
-  onSnapshot,
-  deleteDoc,
-  doc,
-  getDocs,
-  updateDoc
-} from "firebase/firestore";
+import { setDoc, collection, query, where, onSnapshot, deleteDoc, doc, getDocs, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 
@@ -59,7 +49,6 @@ const Students = () => {
     return matchesSearch && matchesLevel;
   });
 
-  // حساب الإحصائيات (اللي كانت ناقصة)
   const totalStudents = filteredStudents.length;
   const totalDepartments = [
     ...new Set(filteredStudents.map((s) => s.department || "General")),
@@ -73,7 +62,6 @@ const Students = () => {
 
     try {
       if (editingStudent) {
-        // تحديث بيانات طالب موجود
         const studentRef = doc(db, "users", editingStudent.id);
         await updateDoc(studentRef, {
           fullName: newStudent.fullName,
@@ -84,26 +72,25 @@ const Students = () => {
         });
         alert("Student updated successfully ✅");
       } else {
-        // إضافة طالب جديد
         if (!newStudent.email) { alert("Email is required!"); return; }
         
+        let userUid;
         try {
-          // محاولة إنشاء حساب جديد
           const tempPass = Math.random().toString(36).slice(-8) + "S!2026";
-          await createUserWithEmailAndPassword(auth, newStudent.email, tempPass);
+          const userCredential = await createUserWithEmailAndPassword(auth, newStudent.email, tempPass);
+          userUid = userCredential.user.uid; // حفظ الـ UID الجديد
           await sendPasswordResetEmail(auth, newStudent.email);
         } catch (authError) {
-          // لو الإيميل موجود فعلاً في الـ Auth
           if (authError.code === 'auth/email-already-in-use') {
-            console.log("User already exists in Auth, sending reset email anyway...");
-            await sendPasswordResetEmail(auth, newStudent.email);
+            alert("This email is already registered in Auth system.");
+            return; // وقف هنا عشان ميعملش دوكيومنت عشوائي لواحد موجود أصلاً
           } else {
-            throw authError; // لو خطأ تاني غير التكرار يطلعه
+            throw authError;
           }
         }
 
-        // في كل الأحوال (سواء جديد أو موجود في Auth) هنضيف بياناته للـ Firestore
-        await addDoc(collection(db, "users"), {
+        // الحل السحري هنا: بنستخدم setDoc مع الـ userUid
+        await setDoc(doc(db, "users", userUid), {
           fullName: newStudent.fullName,
           email: newStudent.email,
           code: newStudent.code,
@@ -114,7 +101,7 @@ const Students = () => {
           createdAt: new Date()
         });
         
-        alert("Student record created and invitation email sent! 📧");
+        alert("Student registered and IDs linked successfully! 📧");
       }
 
       setShowModal(false);
@@ -139,6 +126,8 @@ const Students = () => {
         alert("Student already assigned to this subject ⚠");
         return;
       }
+      // الـ enrollments ممكن تفضل addDoc عادي لأننا مش بنقرأ منها بالـ UID
+      const { addDoc } = await import("firebase/firestore"); 
       await addDoc(collection(db, "enrollments"), {
         studentId: selectedStudent.id,
         courseId: selectedSubject,
@@ -162,7 +151,6 @@ const Students = () => {
         </button>
       </div>
 
-      {/* الـ Stats الـ كاملة رجعت هنا */}
       <div style={statsContainer}>
         <div style={statCard}>
           <h3 style={statNumber}>{totalStudents}</h3>
@@ -277,7 +265,6 @@ const Students = () => {
   );
 };
 
-// الـ Styles زي ما هي بدون تغيير
 const headerStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px" };
 const addBtn = { backgroundColor: "#1E3A8A", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer" };
 const statsContainer = { display: "flex", gap: "20px", marginBottom: "30px" };

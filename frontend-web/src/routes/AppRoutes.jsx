@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext.jsx"; // التعديل هنا
 
 import Login from "../pages/Login.jsx";
 import Dashboard from "../pages/Dashboard.jsx";
@@ -14,6 +15,19 @@ import Subjects from "../pages/admin/Subjects.jsx";
 import PendingAccounts from "../pages/admin/PendingAccounts.jsx";
 import SubjectStudents from "../pages/admin/SubjectStudents.jsx";
 
+// مكون حماية المسارات (فقط للأدمن)
+const ProtectedAdminRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) return null; 
+
+  if (!user || user.role !== "admin") {
+    return <Navigate replace to="/login" />;
+  }
+
+  return children;
+};
+
 const AppRoutes = () => {
   return (
     <BrowserRouter>
@@ -24,13 +38,20 @@ const AppRoutes = () => {
         <Route path="/forget-password" element={<ForgetPassword />} />
         <Route path="/request-email" element={<RequestEmail />} />
 
-        <Route path="/admin" element={<Layout />}>
+        {/* حماية مسار الأدمن بالكامل */}
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedAdminRoute>
+              <Layout />
+            </ProtectedAdminRoute>
+          }
+        >
           <Route index element={<AdminDashboard />} />
           <Route path="students" element={<Students />} />
           <Route path="instructors" element={<Instructors />} />
           <Route path="subjects" element={<Subjects />} />
           <Route path="pending-accounts" element={<PendingAccounts />} />
-
           <Route path="subject-students/:id" element={<SubjectStudents />} />
         </Route>
       </Routes>
