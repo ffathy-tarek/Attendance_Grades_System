@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 const Subjects = () => {
   const [subjects, setSubjects] = useState([]);
   const [instructors, setInstructors] = useState([]);
+  const [enrollCounts, setEnrollCounts] = useState({});
 
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
@@ -45,6 +46,18 @@ const Subjects = () => {
     }));
 
     setSubjects(list);
+
+    const enrollSnap = await getDocs(collection(db, "enrollments"));
+    const counts = {};
+
+    enrollSnap.docs.forEach((doc) => {
+      const data = doc.data();
+      const courseId = data.courseId;
+
+      counts[courseId] = (counts[courseId] || 0) + 1;
+    });
+
+    setEnrollCounts(counts);
   };
 
   const loadInstructors = async () => {
@@ -170,12 +183,24 @@ const Subjects = () => {
           <tbody>
             {filteredSubjects.map((subject) => (
               <tr key={subject.id}>
-                <td style={tdStyle}>{subject.name}</td>
+                <td style={tdStyle}>
+                  <div style={subjectNameStyle}>
+                    {subject.name}
+
+                    <span style={studentsBadge}>
+                      👥 {enrollCounts[subject.id] || 0}
+                    </span>
+                  </div>
+                </td>
+
                 <td style={tdStyle}>{subject.code}</td>
+
                 <td style={tdStyle}>
                   <span style={badgeStyle}>{subject.level}</span>
                 </td>
+
                 <td style={tdStyle}>{subject.department}</td>
+
                 <td style={tdStyle}>{subject.creditHours}</td>
 
                 <td style={tdStyle}>
@@ -286,6 +311,21 @@ const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
   marginBottom: "20px",
+};
+
+const subjectNameStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const studentsBadge = {
+  background: "#EEF2FF",
+  color: "#4338CA",
+  padding: "4px 10px",
+  borderRadius: "20px",
+  fontSize: "12px",
+  fontWeight: "600",
 };
 
 const addBtn = {

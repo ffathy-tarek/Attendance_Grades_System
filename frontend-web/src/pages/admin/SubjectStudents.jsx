@@ -15,16 +15,25 @@ const SubjectStudents = () => {
   const navigate = useNavigate();
 
   const [students, setStudents] = useState([]);
+  const [subjectName, setSubjectName] = useState("");
 
   useEffect(() => {
     loadStudents();
+    loadSubjectName();
   }, []);
+
+  const loadSubjectName = async () => {
+    const subjectRef = doc(db, "courses", id);
+    const subjectSnap = await getDoc(subjectRef);
+
+    if (subjectSnap.exists()) {
+      setSubjectName(subjectSnap.data().name || "Unnamed Course");
+    }
+  };
 
   const loadStudents = async () => {
     const q = query(collection(db, "enrollments"), where("courseId", "==", id));
-
     const snapshot = await getDocs(q);
-
     const list = [];
 
     for (const enroll of snapshot.docs) {
@@ -45,7 +54,15 @@ const SubjectStudents = () => {
   return (
     <div style={{ padding: "30px" }}>
       <div style={headerStyle}>
-        <h2>Subject Students</h2>
+        <div>
+          <h2>
+            <span style={subjectTitle}>{subjectName || "Loading..."}</span>
+          </h2>
+          <p style={subtitleStyle}>Enrolled students in this course</p>
+          <p style={countStyle}>
+            Total students: <strong>{students.length}</strong>
+          </p>
+        </div>
 
         <button style={backBtn} onClick={() => navigate(-1)}>
           Back
@@ -66,15 +83,12 @@ const SubjectStudents = () => {
           <tbody>
             {students.map((s) => (
               <tr key={s.id}>
-                <td style={tdStyle}>{s.fullName}</td>
-
-                <td style={tdStyle}>{s.code}</td>
-
+                <td style={tdStyle}>{s.fullName || "—"}</td>
+                <td style={tdStyle}>{s.code || "—"}</td>
                 <td style={tdStyle}>
-                  <span style={badgeStyle}>{s.academicYear}</span>
+                  <span style={badgeStyle}>{s.academicYear || "—"}</span>
                 </td>
-
-                <td style={tdStyle}>{s.department}</td>
+                <td style={tdStyle}>{s.department || "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -88,10 +102,40 @@ const SubjectStudents = () => {
   );
 };
 
+// ─── Styles ────────────────────────────────────────────────
 const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
   marginBottom: "25px",
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+  gap: "16px",
+};
+
+const subjectTitle = {
+  color: "#1E3A8A",
+  fontWeight: "700",
+};
+
+const subtitleStyle = {
+  margin: "4px 0 8px 0",
+  color: "#64748B",
+  fontSize: "15px",
+};
+
+const countStyle = {
+  margin: "0",
+  color: "#475569",
+  fontSize: "15px",
+};
+
+const backBtn = {
+  background: "#1E3A8A",
+  color: "white",
+  border: "none",
+  padding: "8px 15px",
+  borderRadius: "8px",
+  cursor: "pointer",
 };
 
 const cardStyle = {
@@ -124,15 +168,6 @@ const badgeStyle = {
   padding: "5px 12px",
   borderRadius: "20px",
   fontSize: "13px",
-};
-
-const backBtn = {
-  background: "#1E3A8A",
-  color: "white",
-  border: "none",
-  padding: "8px 15px",
-  borderRadius: "8px",
-  cursor: "pointer",
 };
 
 const emptyStyle = {
