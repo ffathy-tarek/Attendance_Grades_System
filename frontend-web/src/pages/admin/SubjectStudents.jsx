@@ -18,18 +18,6 @@ const SubjectStudents = () => {
   const [subjectName, setSubjectName] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!id) return;
-
-    const init = async () => {
-      setLoading(true);
-      await Promise.all([loadStudents(), loadSubjectName()]);
-      setLoading(false);
-    };
-
-    init();
-  }, [id]);
-
   const loadSubjectName = async () => {
     try {
       const subjectRef = doc(db, "courses", id);
@@ -65,7 +53,6 @@ const SubjectStudents = () => {
               ...studentSnap.data(),
             };
           }
-
           return null;
         }),
       );
@@ -76,6 +63,18 @@ const SubjectStudents = () => {
       setStudents([]);
     }
   };
+
+  useEffect(() => {
+    if (!id) return;
+
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([loadStudents(), loadSubjectName()]);
+      setLoading(false);
+    };
+
+    init();
+  }, [id]);
 
   return (
     <div style={{ padding: "30px" }}>
@@ -114,13 +113,10 @@ const SubjectStudents = () => {
             {students.map((s) => (
               <tr key={s.id}>
                 <td style={tdStyle}>{s.fullName || "—"}</td>
-
                 <td style={tdStyle}>{s.code || "—"}</td>
-
                 <td style={tdStyle}>
                   <span style={badgeStyle}>{s.academicYear || "—"}</span>
                 </td>
-
                 <td style={tdStyle}>{s.department || "—"}</td>
               </tr>
             ))}
@@ -134,8 +130,6 @@ const SubjectStudents = () => {
     </div>
   );
 };
-
-// ─── Styles ────────────────────────────────────────────────
 
 const headerStyle = {
   display: "flex",

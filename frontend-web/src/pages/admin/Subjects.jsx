@@ -46,6 +46,22 @@ const Subjects = () => {
 
   const [newSubject, setNewSubject] = useState(emptySubject);
 
+  // --- دالة الـ Select All الجديدة ---
+  const toggleSelectAllStudents = (filteredStudents) => {
+    const filteredIds = filteredStudents.map((s) => s.id);
+    const allSelected = filteredIds.every((id) =>
+      selectedStudents.includes(id),
+    );
+
+    if (allSelected) {
+      setSelectedStudents((prev) =>
+        prev.filter((id) => !filteredIds.includes(id)),
+      );
+    } else {
+      setSelectedStudents((prev) => [...new Set([...prev, ...filteredIds])]);
+    }
+  };
+
   const loadSubjects = async () => {
     try {
       const snapshot = await getDocs(collection(db, "courses"));
@@ -360,17 +376,53 @@ const Subjects = () => {
         </div>
       )}
 
-      {/* 2. Assign Students Modal */}
+      {/* 2. Assign Students Modal + SELECT ALL BUTTON */}
       {showEnrollModal && (
         <div style={overlayStyle}>
           <div style={{ ...modalStyle, width: "600px" }}>
             <h3>Manage Student Enrollments</h3>
-            <input
-              style={modalInput}
-              placeholder="Search students..."
-              value={studentSearch}
-              onChange={(e) => setStudentSearch(e.target.value)}
-            />
+
+            <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+              <input
+                style={{ ...modalInput, marginTop: 0, flex: 1 }}
+                placeholder="Search students..."
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  const filtered = students.filter((s) =>
+                    s.fullName
+                      ?.toLowerCase()
+                      .includes(studentSearch.toLowerCase()),
+                  );
+                  toggleSelectAllStudents(filtered);
+                }}
+                style={{
+                  padding: "0 15px",
+                  borderRadius: "8px",
+                  border: "1px solid #1E3A8A",
+                  background: "transparent",
+                  color: "#1E3A8A",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                }}
+              >
+                {students
+                  .filter((s) =>
+                    s.fullName
+                      ?.toLowerCase()
+                      .includes(studentSearch.toLowerCase()),
+                  )
+                  .every((s) => selectedStudents.includes(s.id))
+                  ? "Deselect All"
+                  : "Select All"}
+              </button>
+            </div>
+
             <div style={listContainerStyle}>
               {students
                 .filter((s) =>
@@ -487,7 +539,6 @@ const headerStyle = {
   alignItems: "center",
   marginBottom: "25px",
 };
-
 const addBtn = {
   background: "#1E3A8A",
   color: "white",
@@ -498,20 +549,17 @@ const addBtn = {
   fontSize: "14px",
   fontWeight: "500",
 };
-
 const inputStyle = {
   padding: "10px",
   borderRadius: "8px",
   border: "1px solid #CBD5E1",
 };
-
 const cardStyle = {
   background: "white",
   borderRadius: "12px",
   boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
   overflow: "hidden",
 };
-
 const tableStyle = { width: "100%", borderCollapse: "collapse" };
 const thStyle = {
   padding: "15px",
@@ -524,7 +572,6 @@ const tdStyle = {
   borderTop: "1px solid #eee",
   fontSize: "14px",
 };
-
 const assignInsBtn = {
   background: "#4F46E5",
   color: "white",
@@ -575,7 +622,6 @@ const deleteBtn = {
   cursor: "pointer",
   fontSize: "12px",
 };
-
 const badgeStyle = {
   backgroundColor: "#E0F2FE",
   color: "#0EA5E9",
@@ -593,7 +639,6 @@ const studentCountBadge = {
   fontWeight: "bold",
   marginLeft: "5px",
 };
-
 const overlayStyle = {
   position: "fixed",
   top: 0,
@@ -620,7 +665,6 @@ const modalInput = {
   border: "1px solid #ddd",
   boxSizing: "border-box",
 };
-
 const listContainerStyle = {
   maxHeight: "300px",
   overflow: "auto",
@@ -636,7 +680,6 @@ const listItemStyle = {
   gap: "10px",
   borderBottom: "1px solid #f9f9f9",
 };
-
 const saveBtn = {
   background: "#1E3A8A",
   color: "white",
