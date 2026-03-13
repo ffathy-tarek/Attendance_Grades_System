@@ -6,7 +6,8 @@ import {
   deleteDoc,
   doc,
   updateDoc,
-  getDoc,
+  query,
+  where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate } from "react-router-dom";
@@ -14,12 +15,22 @@ import { useNavigate } from "react-router-dom";
 const Subjects = () => {
   const [subjects, setSubjects] = useState([]);
   const [instructors, setInstructors] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [selectedInstructors, setSelectedInstructors] = useState([]);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [instructorSearch, setInstructorSearch] = useState("");
   const [enrollCounts, setEnrollCounts] = useState({});
-
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
 
   const [showModal, setShowModal] = useState(false);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [showInstructorModal, setShowInstructorModal] = useState(false);
+  const [showAssignInsModal, setShowAssignInsModal] = useState(false);
+
+  const [currentSubjectId, setCurrentSubjectId] = useState(null);
+  const [currentInstructors, setCurrentInstructors] = useState([]);
   const [editingSubject, setEditingSubject] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -30,158 +41,169 @@ const Subjects = () => {
     code: "",
     level: "",
     creditHours: "",
-    department: "",
     instructorIds: [],
   };
 
   const [newSubject, setNewSubject] = useState(emptySubject);
 
-  useEffect(() => {
-    const init = async () => {
-      await loadSubjects();
-      await loadInstructors();
-    };
-    init();
-  }, []);
-
   const loadSubjects = async () => {
     try {
       const snapshot = await getDocs(collection(db, "courses"));
-
-      const list = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setSubjects(list);
 
       const enrollSnap = await getDocs(collection(db, "enrollments"));
       const counts = {};
-
       enrollSnap.docs.forEach((d) => {
         const data = d.data();
-        const courseId = data.courseId;
-
-        counts[courseId] = (counts[courseId] || 0) + 1;
+        counts[data.courseId] = (counts[data.courseId] || 0) + 1;
       });
-
       setEnrollCounts(counts);
-    } catch (error) {
-      console.error("Load subjects error:", error);
+    } catch (e) {
+      console.error("Error loading subjects:", e);
     }
   };
 
-  const loadInstructors = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, "users"));
-
-      const list = snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((u) => u.role === "instructor");
-
-      setInstructors(list);
-    } catch (error) {
-      console.error("Load instructors error:", error);
-    }
+  const loadUsers = async () => {
+    const snapshot = await getDocs(collection(db, "users"));
+    const allUsers = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    setStudents(allUsers.filter((u) => u.role === "student"));
+    setInstructors(allUsers.filter((u) => u.role === "instructor"));
   };
 
-  const filteredSubjects = subjects.filter((sub) => {
-    const instructorNames = (
-      sub.instructorIds || (sub.instructorId ? [sub.instructorId] : [])
-    )
-      .map((id) => instructors.find((i) => i.id === id)?.fullName || "")
-      .join(", ");
+  useEffect(() => {
+    loadSubjects();
+    loadUsers();
+  }, []);
 
-    const subjectName = (sub.name || "").toLowerCase();
-    const instructorText = instructorNames.toLowerCase();
-    const searchText = search.toLowerCase();
-
-    const matchSearch =
-      subjectName.includes(searchText) || instructorText.includes(searchText);
-
-    const matchLevel =
-      levelFilter === "all" || (sub.level || "").toString() === levelFilter;
-
-    return matchSearch && matchLevel;
-  });
-
-  const handleSave = async () => {
-    if (!newSubject.name || !newSubject.code) {
-      alert("Please fill name and code");
-      return;
-    }
-
+  const syncInstructors = async () => {
     setSaving(true);
-
     try {
-      if (editingSubject) {
-        const ref = doc(db, "courses", editingSubject.id);
-        const snap = await getDoc(ref);
+      const subjectRef = doc(db, "courses", currentSubjectId);
+      await updateDoc(subjectRef, { instructorIds: selectedInstructors });
+      alert("Instructor list updated successfully!");
+      setShowAssignInsModal(false);
+      loadSubjects();
+    } catch (e) {
+      alert("Error updating instructors");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-        if (snap.exists()) {
-          await updateDoc(ref, { ...newSubject });
-        } else {
-          alert("Subject no longer exists");
+  const syncStudents = async () => {
+    setSaving(true);
+    try {
+      const q = query(
+        collection(db, "enrollments"),
+        where("courseId", "==", currentSubjectId),
+      );
+      const existingEnrollSnap = await getDocs(q);
+      const existingEnrollments = existingEnrollSnap.docs.map((d) => ({
+        id: d.id,
+        studentId: d.data().studentId,
+      }));
+
+      for (const enroll of existingEnrollments) {
+        if (!selectedStudents.includes(enroll.studentId)) {
+          await deleteDoc(doc(db, "enrollments", enroll.id));
         }
-      } else {
-        await addDoc(collection(db, "courses"), { ...newSubject });
       }
 
-      resetModal();
-      loadSubjects();
-    } catch (error) {
-      console.error(error);
-      alert("Error saving subject");
-    }
+      const existingStudentIds = existingEnrollments.map((e) => e.studentId);
+      for (const sId of selectedStudents) {
+        if (!existingStudentIds.includes(sId)) {
+          await addDoc(collection(db, "enrollments"), {
+            courseId: currentSubjectId,
+            studentId: sId,
+          });
+        }
+      }
 
+      alert("Student enrollments updated successfully!");
+      setShowEnrollModal(false);
+      loadSubjects();
+    } catch (e) {
+      alert("Error updating students");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEnrollModal = async (subjectId) => {
+    setCurrentSubjectId(subjectId);
+    setSaving(true);
+    const q = query(
+      collection(db, "enrollments"),
+      where("courseId", "==", subjectId),
+    );
+    const snap = await getDocs(q);
+    const enrolledIds = snap.docs.map((d) => d.data().studentId);
+    setSelectedStudents(enrolledIds);
     setSaving(false);
+    setShowEnrollModal(true);
   };
 
-  const deleteSubject = async (id) => {
-    if (window.confirm("Are you sure you want to delete this subject?")) {
+  const deleteSubject = async (id, subjectName) => {
+    if (!window.confirm(`Confirm deleting ${subjectName || "this subject"}?`))
+      return;
+    try {
       await deleteDoc(doc(db, "courses", id));
+      const enrollSnap = await getDocs(
+        query(collection(db, "enrollments"), where("courseId", "==", id)),
+      );
+      for (const e of enrollSnap.docs) {
+        await deleteDoc(doc(db, "enrollments", e.id));
+      }
+      alert("Subject deleted successfully!");
+    } finally {
       loadSubjects();
     }
   };
 
-  const openEditModal = (subject) => {
-    const { id, ...data } = subject;
-
-    setEditingSubject(subject);
-    setNewSubject(data);
-    setShowModal(true);
-  };
-
-  const openAddModal = () => {
-    setEditingSubject(null);
-    setNewSubject(emptySubject);
-    setShowModal(true);
-  };
-
-  const resetModal = () => {
-    setShowModal(false);
-    setEditingSubject(null);
-    setNewSubject(emptySubject);
+  const handleSave = async () => {
+    if (!newSubject.name || !newSubject.code)
+      return alert("Fill Name and Code");
+    setSaving(true);
+    try {
+      if (editingSubject) {
+        await updateDoc(doc(db, "courses", editingSubject.id), newSubject);
+        alert("Subject updated successfully!");
+      } else {
+        await addDoc(collection(db, "courses"), newSubject);
+        alert("Subject added successfully!");
+      }
+      setShowModal(false);
+      loadSubjects();
+    } catch (e) {
+      alert("Error saving");
+    }
+    setSaving(false);
   };
 
   return (
     <div style={{ padding: "30px" }}>
       <div style={headerStyle}>
-        <h2>Subjects Management</h2>
-
-        <button style={addBtn} onClick={openAddModal}>
-          Add Subject
+        <h2 style={{ margin: 0 }}>Subjects Management</h2>
+        <button
+          style={addBtn}
+          onClick={() => {
+            setEditingSubject(null);
+            setNewSubject(emptySubject);
+            setShowModal(true);
+          }}
+        >
+          + Add Subject
         </button>
       </div>
 
       <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
         <input
           style={inputStyle}
-          placeholder="Search subject or instructor"
+          placeholder="Search subject"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-
         <select
           style={inputStyle}
           value={levelFilter}
@@ -202,79 +224,231 @@ const Subjects = () => {
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Code</th>
               <th style={thStyle}>Level</th>
-              <th style={thStyle}>Department</th>
-              <th style={thStyle}>Credit Hours</th>
               <th style={thStyle}>Actions</th>
             </tr>
           </thead>
-
           <tbody>
-            {filteredSubjects.map((subject) => (
-              <tr key={subject.id}>
-                <td style={tdStyle}>
-                  <div style={subjectNameStyle}>
-                    {subject.name}
-
-                    <span style={studentsBadge}>
+            {subjects
+              .filter(
+                (sub) =>
+                  (sub.name || "")
+                    .toLowerCase()
+                    .includes(search.toLowerCase()) &&
+                  (levelFilter === "all" ||
+                    (sub.level || "").toString() === levelFilter),
+              )
+              .map((subject) => (
+                <tr key={subject.id}>
+                  <td style={tdStyle}>
+                    <strong>{subject.name}</strong>{" "}
+                    <span style={studentCountBadge}>
                       👥 {enrollCounts[subject.id] || 0}
                     </span>
-                  </div>
-                </td>
-
-                <td style={tdStyle}>{subject.code}</td>
-
-                <td style={tdStyle}>
-                  <span style={badgeStyle}>{subject.level}</span>
-                </td>
-
-                <td style={tdStyle}>{subject.department}</td>
-
-                <td style={tdStyle}>{subject.creditHours}</td>
-
-                <td style={tdStyle}>
-                  <button
-                    style={editBtn}
-                    onClick={() => openEditModal(subject)}
-                  >
-                    Edit
-                  </button>
-
-                  <button
-                    style={deleteBtn}
-                    onClick={() => deleteSubject(subject.id)}
-                  >
-                    Delete
-                  </button>
-
-                  <button
-                    style={viewBtn}
-                    onClick={() =>
-                      navigate(`/admin/subject-students/${subject.id}`)
-                    }
-                  >
-                    View Students
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td style={tdStyle}>{subject.code}</td>
+                  <td style={tdStyle}>
+                    <span style={badgeStyle}>{subject.level}</span>
+                  </td>
+                  <td style={tdStyle}>
+                    <button
+                      style={assignInsBtn}
+                      onClick={() => {
+                        setCurrentSubjectId(subject.id);
+                        setSelectedInstructors(subject.instructorIds || []);
+                        setShowAssignInsModal(true);
+                      }}
+                    >
+                      Instructors
+                    </button>
+                    <button
+                      style={instructorBtn}
+                      onClick={() => {
+                        setCurrentInstructors(
+                          instructors.filter((i) =>
+                            subject.instructorIds?.includes(i.id),
+                          ),
+                        );
+                        setShowInstructorModal(true);
+                      }}
+                    >
+                      View Instructors
+                    </button>
+                    <button
+                      style={viewBtn}
+                      onClick={() => openEnrollModal(subject.id)}
+                    >
+                      Students
+                    </button>
+                    <button
+                      style={viewBtn}
+                      onClick={() =>
+                        navigate(`/admin/subject-students/${subject.id}`)
+                      }
+                    >
+                      View Students
+                    </button>
+                    <button
+                      style={editBtn}
+                      onClick={() => {
+                        setEditingSubject(subject);
+                        setNewSubject(subject);
+                        setShowModal(true);
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      style={deleteBtn}
+                      onClick={() => deleteSubject(subject.id, subject.name)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
 
+      {/* 1. Assign Instructor Modal */}
+      {showAssignInsModal && (
+        <div style={overlayStyle}>
+          <div style={{ ...modalStyle, width: "550px" }}>
+            <h3>Manage Instructors</h3>
+            <input
+              style={modalInput}
+              placeholder="Search instructors..."
+              value={instructorSearch}
+              onChange={(e) => setInstructorSearch(e.target.value)}
+            />
+            <div style={listContainerStyle}>
+              {instructors
+                .filter((i) =>
+                  i.fullName
+                    ?.toLowerCase()
+                    .includes(instructorSearch.toLowerCase()),
+                )
+                .map((ins) => (
+                  <div key={ins.id} style={listItemStyle}>
+                    <input
+                      type="checkbox"
+                      checked={selectedInstructors.includes(ins.id)}
+                      onChange={() =>
+                        setSelectedInstructors((prev) =>
+                          prev.includes(ins.id)
+                            ? prev.filter((x) => x !== ins.id)
+                            : [...prev, ins.id],
+                        )
+                      }
+                    />
+                    <span>{ins.fullName}</span>
+                  </div>
+                ))}
+            </div>
+            <div style={{ marginTop: "20px" }}>
+              <button style={saveBtn} onClick={syncInstructors}>
+                {saving ? "Updating..." : "Save Changes"}
+              </button>
+              <button
+                style={cancelBtn}
+                onClick={() => setShowAssignInsModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Assign Students Modal */}
+      {showEnrollModal && (
+        <div style={overlayStyle}>
+          <div style={{ ...modalStyle, width: "600px" }}>
+            <h3>Manage Student Enrollments</h3>
+            <input
+              style={modalInput}
+              placeholder="Search students..."
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+            />
+            <div style={listContainerStyle}>
+              {students
+                .filter((s) =>
+                  s.fullName
+                    ?.toLowerCase()
+                    .includes(studentSearch.toLowerCase()),
+                )
+                .map((s) => (
+                  <div key={s.id} style={listItemStyle}>
+                    <input
+                      type="checkbox"
+                      checked={selectedStudents.includes(s.id)}
+                      onChange={() =>
+                        setSelectedStudents((prev) =>
+                          prev.includes(s.id)
+                            ? prev.filter((x) => x !== s.id)
+                            : [...prev, s.id],
+                        )
+                      }
+                    />
+                    <span>{s.fullName}</span>
+                  </div>
+                ))}
+            </div>
+            <div style={{ marginTop: "20px" }}>
+              <button style={saveBtn} onClick={syncStudents}>
+                {saving ? "Updating..." : "Save Changes"}
+              </button>
+              <button
+                style={cancelBtn}
+                onClick={() => setShowEnrollModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. View Instructors Modal */}
+      {showInstructorModal && (
+        <div style={overlayStyle}>
+          <div style={modalStyle}>
+            <h3>Instructor Details</h3>
+            <div style={{ margin: "20px 0" }}>
+              {currentInstructors.length > 0 ? (
+                currentInstructors.map((i) => (
+                  <div key={i.id} style={instructorRow}>
+                    👤 {i.fullName}
+                  </div>
+                ))
+              ) : (
+                <p>No instructors assigned.</p>
+              )}
+            </div>
+            <button
+              style={cancelBtn}
+              onClick={() => setShowInstructorModal(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Add/Edit Subject Modal */}
       {showModal && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
             <h3>{editingSubject ? "Edit Subject" : "Add Subject"}</h3>
-
             <input
               style={modalInput}
-              placeholder="Subject Name"
+              placeholder="Name"
               value={newSubject.name}
               onChange={(e) =>
                 setNewSubject({ ...newSubject, name: e.target.value })
               }
             />
-
             <input
               style={modalInput}
               placeholder="Code"
@@ -283,7 +457,6 @@ const Subjects = () => {
                 setNewSubject({ ...newSubject, code: e.target.value })
               }
             />
-
             <input
               style={modalInput}
               placeholder="Level"
@@ -292,38 +465,12 @@ const Subjects = () => {
                 setNewSubject({ ...newSubject, level: e.target.value })
               }
             />
-
-            <input
-              style={modalInput}
-              placeholder="Credit Hours"
-              value={newSubject.creditHours}
-              onChange={(e) =>
-                setNewSubject({
-                  ...newSubject,
-                  creditHours: e.target.value,
-                })
-              }
-            />
-
-            <input
-              style={modalInput}
-              placeholder="Department"
-              value={newSubject.department}
-              onChange={(e) =>
-                setNewSubject({
-                  ...newSubject,
-                  department: e.target.value,
-                })
-              }
-            />
-
-            <div style={{ marginTop: "15px", textAlign: "right" }}>
-              <button style={cancelBtn} onClick={resetModal}>
-                Cancel
-              </button>
-
-              <button style={saveBtn} disabled={saving} onClick={handleSave}>
+            <div style={{ marginTop: "20px" }}>
+              <button style={saveBtn} onClick={handleSave}>
                 {saving ? "Saving..." : "Save"}
+              </button>
+              <button style={cancelBtn} onClick={() => setShowModal(false)}>
+                Cancel
               </button>
             </div>
           </div>
@@ -333,99 +480,118 @@ const Subjects = () => {
   );
 };
 
-/* ===== Styles ===== */
-
+// --- Styles الموحدة والاحترافية ---
 const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
-  marginBottom: "20px",
-};
-
-const subjectNameStyle = {
-  display: "flex",
   alignItems: "center",
-  gap: "10px",
-};
-
-const studentsBadge = {
-  background: "#EEF2FF",
-  color: "#4338CA",
-  padding: "4px 10px",
-  borderRadius: "20px",
-  fontSize: "12px",
-  fontWeight: "600",
+  marginBottom: "25px",
 };
 
 const addBtn = {
   background: "#1E3A8A",
   color: "white",
-  border: "none",
-  padding: "10px 15px",
+  padding: "8px 15px",
   borderRadius: "8px",
+  border: "none",
   cursor: "pointer",
+  fontSize: "14px",
+  fontWeight: "500",
 };
 
 const inputStyle = {
   padding: "10px",
   borderRadius: "8px",
   border: "1px solid #CBD5E1",
-  width: "200px",
 };
 
 const cardStyle = {
   background: "white",
   borderRadius: "12px",
-  boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+  overflow: "hidden",
 };
 
-const tableStyle = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
+const tableStyle = { width: "100%", borderCollapse: "collapse" };
 const thStyle = {
   padding: "15px",
   backgroundColor: "#F1F5F9",
-  color: "#1E3A8A",
   textAlign: "left",
+  color: "#1E3A8A",
 };
-
 const tdStyle = {
   padding: "15px",
-  borderTop: "1px solid #E2E8F0",
+  borderTop: "1px solid #eee",
+  fontSize: "14px",
+};
+
+const assignInsBtn = {
+  background: "#4F46E5",
+  color: "white",
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: "6px",
+  marginLeft: "5px",
+  cursor: "pointer",
+  fontSize: "12px",
+};
+const instructorBtn = {
+  background: "#F59E0B",
+  color: "white",
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: "6px",
+  marginLeft: "5px",
+  cursor: "pointer",
+  fontSize: "12px",
+};
+const viewBtn = {
+  background: "#059669",
+  color: "white",
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: "6px",
+  marginLeft: "5px",
+  cursor: "pointer",
+  fontSize: "12px",
+};
+const editBtn = {
+  background: "#3B82F6",
+  color: "white",
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: "6px",
+  marginLeft: "5px",
+  cursor: "pointer",
+  fontSize: "12px",
+};
+const deleteBtn = {
+  background: "#DC2626",
+  color: "white",
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: "6px",
+  marginLeft: "5px",
+  cursor: "pointer",
+  fontSize: "12px",
 };
 
 const badgeStyle = {
   backgroundColor: "#E0F2FE",
   color: "#0EA5E9",
-  padding: "5px 12px",
-  borderRadius: "20px",
+  padding: "4px 10px",
+  borderRadius: "15px",
+  fontSize: "12px",
+  fontWeight: "bold",
 };
-
-const editBtn = {
-  background: "#3B82F6",
-  color: "white",
-  border: "none",
-  padding: "6px 12px",
-  borderRadius: "8px",
-  marginRight: "8px",
-};
-
-const deleteBtn = {
-  background: "#DC2626",
-  color: "white",
-  border: "none",
-  padding: "6px 12px",
-  borderRadius: "8px",
-};
-
-const viewBtn = {
-  background: "#059669",
-  color: "white",
-  border: "none",
-  padding: "6px 12px",
-  borderRadius: "8px",
-  marginLeft: "8px",
+const studentCountBadge = {
+  backgroundColor: "#F1F5F9",
+  color: "#475569",
+  padding: "2px 8px",
+  borderRadius: "12px",
+  fontSize: "11px",
+  fontWeight: "bold",
+  marginLeft: "5px",
 };
 
 const overlayStyle = {
@@ -438,38 +604,65 @@ const overlayStyle = {
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
+  zIndex: 1000,
 };
-
 const modalStyle = {
   background: "white",
-  padding: "30px",
+  padding: "25px",
   borderRadius: "12px",
-  width: "400px",
+  boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
 };
-
 const modalInput = {
   width: "100%",
   padding: "10px",
   marginTop: "10px",
   borderRadius: "8px",
-  border: "1px solid #CBD5E1",
+  border: "1px solid #ddd",
+  boxSizing: "border-box",
 };
 
-const cancelBtn = {
-  background: "#94A3B8",
-  color: "white",
-  border: "none",
-  padding: "8px 15px",
+const listContainerStyle = {
+  maxHeight: "300px",
+  overflow: "auto",
+  marginTop: "15px",
+  border: "1px solid #eee",
   borderRadius: "8px",
-  marginRight: "10px",
+  padding: "10px",
+};
+const listItemStyle = {
+  display: "flex",
+  alignItems: "center",
+  padding: "8px",
+  gap: "10px",
+  borderBottom: "1px solid #f9f9f9",
 };
 
 const saveBtn = {
   background: "#1E3A8A",
   color: "white",
   border: "none",
-  padding: "8px 15px",
+  padding: "8px 20px",
   borderRadius: "8px",
+  cursor: "pointer",
+  marginRight: "10px",
+  fontWeight: "500",
+};
+const cancelBtn = {
+  background: "#94A3B8",
+  color: "white",
+  border: "none",
+  padding: "8px 20px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "500",
+};
+const instructorRow = {
+  padding: "10px",
+  background: "#f8fafc",
+  borderRadius: "8px",
+  marginBottom: "8px",
+  borderLeft: "4px solid #F59E0B",
+  fontWeight: "500",
 };
 
 export default Subjects;
