@@ -6,6 +6,7 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate } from "react-router-dom";
@@ -20,54 +21,68 @@ const Subjects = () => {
 
   const [showModal, setShowModal] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const navigate = useNavigate();
 
-  const [newSubject, setNewSubject] = useState({
+  const emptySubject = {
     name: "",
     code: "",
     level: "",
     creditHours: "",
     department: "",
     instructorIds: [],
-  });
+  };
+
+  const [newSubject, setNewSubject] = useState(emptySubject);
 
   useEffect(() => {
-    loadSubjects();
-    loadInstructors();
+    const init = async () => {
+      await loadSubjects();
+      await loadInstructors();
+    };
+    init();
   }, []);
 
   const loadSubjects = async () => {
-    const snapshot = await getDocs(collection(db, "courses"));
+    try {
+      const snapshot = await getDocs(collection(db, "courses"));
 
-    const list = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    }));
+      const list = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
 
-    setSubjects(list);
+      setSubjects(list);
 
-    const enrollSnap = await getDocs(collection(db, "enrollments"));
-    const counts = {};
+      const enrollSnap = await getDocs(collection(db, "enrollments"));
+      const counts = {};
 
-    enrollSnap.docs.forEach((doc) => {
-      const data = doc.data();
-      const courseId = data.courseId;
+      enrollSnap.docs.forEach((d) => {
+        const data = d.data();
+        const courseId = data.courseId;
 
-      counts[courseId] = (counts[courseId] || 0) + 1;
-    });
+        counts[courseId] = (counts[courseId] || 0) + 1;
+      });
 
-    setEnrollCounts(counts);
+      setEnrollCounts(counts);
+    } catch (error) {
+      console.error("Load subjects error:", error);
+    }
   };
 
   const loadInstructors = async () => {
-    const snapshot = await getDocs(collection(db, "users"));
+    try {
+      const snapshot = await getDocs(collection(db, "users"));
 
-    const list = snapshot.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((u) => u.role === "instructor");
+      const list = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((u) => u.role === "instructor");
 
-    setInstructors(list);
+      setInstructors(list);
+    } catch (error) {
+      console.error("Load instructors error:", error);
+    }
   };
 
   const filteredSubjects = subjects.filter((sub) => {
@@ -96,25 +111,30 @@ const Subjects = () => {
       return;
     }
 
-    if (editingSubject) {
-      await updateDoc(doc(db, "courses", editingSubject.id), newSubject);
-    } else {
-      await addDoc(collection(db, "courses"), newSubject);
+    setSaving(true);
+
+    try {
+      if (editingSubject) {
+        const ref = doc(db, "courses", editingSubject.id);
+        const snap = await getDoc(ref);
+
+        if (snap.exists()) {
+          await updateDoc(ref, { ...newSubject });
+        } else {
+          alert("Subject no longer exists");
+        }
+      } else {
+        await addDoc(collection(db, "courses"), { ...newSubject });
+      }
+
+      resetModal();
+      loadSubjects();
+    } catch (error) {
+      console.error(error);
+      alert("Error saving subject");
     }
 
-    setShowModal(false);
-    setEditingSubject(null);
-
-    setNewSubject({
-      name: "",
-      code: "",
-      level: "",
-      creditHours: "",
-      department: "",
-      instructorIds: [],
-    });
-
-    loadSubjects();
+    setSaving(false);
   };
 
   const deleteSubject = async (id) => {
@@ -125,9 +145,23 @@ const Subjects = () => {
   };
 
   const openEditModal = (subject) => {
+    const { id, ...data } = subject;
+
     setEditingSubject(subject);
-    setNewSubject(subject);
+    setNewSubject(data);
     setShowModal(true);
+  };
+
+  const openAddModal = () => {
+    setEditingSubject(null);
+    setNewSubject(emptySubject);
+    setShowModal(true);
+  };
+
+  const resetModal = () => {
+    setShowModal(false);
+    setEditingSubject(null);
+    setNewSubject(emptySubject);
   };
 
   return (
@@ -135,13 +169,7 @@ const Subjects = () => {
       <div style={headerStyle}>
         <h2>Subjects Management</h2>
 
-        <button
-          style={addBtn}
-          onClick={() => {
-            setEditingSubject(null);
-            setShowModal(true);
-          }}
-        >
+        <button style={addBtn} onClick={openAddModal}>
           Add Subject
         </button>
       </div>
@@ -290,12 +318,12 @@ const Subjects = () => {
             />
 
             <div style={{ marginTop: "15px", textAlign: "right" }}>
-              <button style={cancelBtn} onClick={() => setShowModal(false)}>
+              <button style={cancelBtn} onClick={resetModal}>
                 Cancel
               </button>
 
-              <button style={saveBtn} onClick={handleSave}>
-                Save
+              <button style={saveBtn} disabled={saving} onClick={handleSave}>
+                {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

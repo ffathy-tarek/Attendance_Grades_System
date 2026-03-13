@@ -16,39 +16,65 @@ const SubjectStudents = () => {
 
   const [students, setStudents] = useState([]);
   const [subjectName, setSubjectName] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadStudents();
-    loadSubjectName();
-  }, []);
+    if (!id) return;
+
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([loadStudents(), loadSubjectName()]);
+      setLoading(false);
+    };
+
+    init();
+  }, [id]);
 
   const loadSubjectName = async () => {
-    const subjectRef = doc(db, "courses", id);
-    const subjectSnap = await getDoc(subjectRef);
+    try {
+      const subjectRef = doc(db, "courses", id);
+      const subjectSnap = await getDoc(subjectRef);
 
-    if (subjectSnap.exists()) {
-      setSubjectName(subjectSnap.data().name || "Unnamed Course");
+      if (subjectSnap.exists()) {
+        setSubjectName(subjectSnap.data().name || "Unnamed Course");
+      } else {
+        setSubjectName("Unknown Course");
+      }
+    } catch (error) {
+      console.error("Error loading subject:", error);
+      setSubjectName("Error loading course");
     }
   };
 
   const loadStudents = async () => {
-    const q = query(collection(db, "enrollments"), where("courseId", "==", id));
-    const snapshot = await getDocs(q);
-    const list = [];
+    try {
+      const q = query(
+        collection(db, "enrollments"),
+        where("courseId", "==", id),
+      );
+      const snapshot = await getDocs(q);
 
-    for (const enroll of snapshot.docs) {
-      const studentRef = doc(db, "users", enroll.data().studentId);
-      const studentSnap = await getDoc(studentRef);
+      const studentsList = await Promise.all(
+        snapshot.docs.map(async (enroll) => {
+          const studentRef = doc(db, "users", enroll.data().studentId);
+          const studentSnap = await getDoc(studentRef);
 
-      if (studentSnap.exists()) {
-        list.push({
-          id: studentSnap.id,
-          ...studentSnap.data(),
-        });
-      }
+          if (studentSnap.exists()) {
+            return {
+              id: studentSnap.id,
+              ...studentSnap.data(),
+            };
+          }
+
+          return null;
+        }),
+      );
+
+      setStudents(studentsList.filter(Boolean));
+    } catch (error) {
+      console.error("Error loading students:", error);
+      setStudents([]);
     }
-
-    setStudents(list);
   };
 
   return (
@@ -56,9 +82,13 @@ const SubjectStudents = () => {
       <div style={headerStyle}>
         <div>
           <h2>
-            <span style={subjectTitle}>{subjectName || "Loading..."}</span>
+            <span style={subjectTitle}>
+              {loading ? "Loading..." : subjectName}
+            </span>
           </h2>
+
           <p style={subtitleStyle}>Enrolled students in this course</p>
+
           <p style={countStyle}>
             Total students: <strong>{students.length}</strong>
           </p>
@@ -84,17 +114,20 @@ const SubjectStudents = () => {
             {students.map((s) => (
               <tr key={s.id}>
                 <td style={tdStyle}>{s.fullName || "—"}</td>
+
                 <td style={tdStyle}>{s.code || "—"}</td>
+
                 <td style={tdStyle}>
                   <span style={badgeStyle}>{s.academicYear || "—"}</span>
                 </td>
+
                 <td style={tdStyle}>{s.department || "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {students.length === 0 && (
+        {!loading && students.length === 0 && (
           <p style={emptyStyle}>No students enrolled yet</p>
         )}
       </div>
@@ -103,6 +136,7 @@ const SubjectStudents = () => {
 };
 
 // ─── Styles ────────────────────────────────────────────────
+
 const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
@@ -177,5 +211,3 @@ const emptyStyle = {
 };
 
 export default SubjectStudents;
-
-// end
