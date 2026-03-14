@@ -1,37 +1,48 @@
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
-import { db } from "../../firebase"; 
-import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { collection, onSnapshot, doc, updateDoc, setDoc, query, where, deleteDoc } from "firebase/firestore";
+import { db, app } from "../../firebase"; 
+import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { initializeApp, deleteApp } from "firebase/app";
 
 function PendingAccounts() {
   const [pendingAccounts, setPendingAccounts] = useState([]);
-  const auth = getAuth();
 
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [studentDetails, setStudentDetails] = useState({
     academicYear: "", 
-    department: ""   
+    department: "",
+    password: "" 
   });
 
   useEffect(() => {
     const q = query(collection(db, "emailRequests"), where("status", "==", "pending"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPendingAccounts(data);
+      
+      // التعديل هنا: ترتيب البيانات بحيث الأقدم (تاريخياً) يظهر أولاً
+      const sortedData = data.sort((a, b) => {
+        const dateA = a.createdAt?.seconds || 0;
+        const dateB = b.createdAt?.seconds || 0;
+        return dateA - dateB; // الأقدم فوق
+      });
+
+      setPendingAccounts(sortedData);
     });
     return () => unsubscribe();
   }, []);
 
   const handleOpenApproveModal = (account) => {
     setSelectedAccount(account);
-    // ريست للبيانات
-    setStudentDetails({ academicYear: "", department: "" }); 
+    setStudentDetails({ academicYear: "", department: "", password: "" }); 
     setShowApproveModal(true);
   };
 
   const confirmApprove = async () => {
-    // التحقق من القسم لكل الفئات، والتحقق من السنة الدراسية للطلاب فقط
+    if (!studentDetails.password || studentDetails.password.length < 6) {
+        alert("Please enter a password (min 6 characters)!");
+        return;
+    }
     if (!studentDetails.department) {
         alert("Please select a Department!");
         return;
@@ -42,43 +53,48 @@ function PendingAccounts() {
     }
 
     try {
-      // 1. إنشاء الحساب بكلمة مرور مؤقتة تعتمد على نوع المستخدم
-      const tempPassword = selectedAccount.role === "instructor" ? "Doctor@2026" : "Student@2026";
+      const secondaryApp = initializeApp(app.options, "SecondaryApproval");
+      const secondaryAuth = getAuth(secondaryApp);
       
+      let userCredential;
       try {
-        await createUserWithEmailAndPassword(auth, selectedAccount.email, tempPassword);
+        userCredential = await createUserWithEmailAndPassword(secondaryAuth, selectedAccount.email, studentDetails.password);
+        
+        await signOut(secondaryAuth);
+        await deleteApp(secondaryApp);
       } catch (authError) {
-        if (authError.code !== 'auth/email-already-in-use') throw authError;
+        await deleteApp(secondaryApp);
+        if (authError.code === 'auth/email-already-in-use') {
+            alert("This email is already registered!");
+            return;
+        }
+        throw authError;
       }
 
-      // 2. إرسال إيميل إعادة تعيين الباسوورد
-      await sendPasswordResetEmail(auth, selectedAccount.email);
+      const newUserUID = userCredential.user.uid;
 
-      // 3. تحديث حالة الطلب في Firestore
       await updateDoc(doc(db, "emailRequests", selectedAccount.id), {
         status: "approved"
       });
 
-      // 4. تجهيز بيانات المستخدم الجديد بناءً على الـ Role
       const userData = {
         fullName: selectedAccount.name || selectedAccount.fullName,
         email: selectedAccount.email,
-        role: selectedAccount.role, // هيجيب instructor أو student تلقائياً
+        role: selectedAccount.role, 
         status: "active",
         createdAt: new Date(),
         department: studentDetails.department,
+        uid: newUserUID
       };
 
-      // إضافة تفاصيل خاصة بالطالب فقط
       if (selectedAccount.role === "student") {
         userData.code = selectedAccount.code || "N/A";
         userData.academicYear = Number(studentDetails.academicYear);
       }
 
-      // حفظ البيانات في كولكشن الـ users
-      await addDoc(collection(db, "users"), userData);
+      await setDoc(doc(db, "users", newUserUID), userData);
 
-      alert(`Success! ${selectedAccount.role} can now login.`);
+      alert(`Success! ${selectedAccount.role} created successfully. ✅`);
       setShowApproveModal(false);
       setSelectedAccount(null);
     } catch (error) {
@@ -94,14 +110,14 @@ function PendingAccounts() {
     } catch (error) { alert(error.message); }
   };
 
-  // ======= الستايلات (بدون تغيير) =======
+  // ======= Styles =======
   const tableStyle = { width: "100%", borderCollapse: "collapse", backgroundColor: "#FFFFFF", borderRadius: "10px", overflow: "hidden" };
   const thStyle = { padding: "14px", backgroundColor: "#F1F5F9", color: "#1E3A8A", textAlign: "left" };
   const tdStyle = { padding: "14px", borderTop: "1px solid #E2E8F0", textAlign: "left" };
   const approveBtn = { backgroundColor: "#22C55E", color: "white", border: "none", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", marginRight: "8px" };
   const rejectBtn = { backgroundColor: "#EF4444", color: "white", border: "none", padding: "6px 12px", borderRadius: "6px", cursor: "pointer" };
   const overlayStyle = { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-  const modalStyle = { backgroundColor: "white", padding: "30px", borderRadius: "12px", width: "400px" };
+  const modalStyle = { backgroundColor: "white", padding: "30px", borderRadius: "12px", width: "400px", maxHeight: "90vh", overflowY: "auto" };
   const modalInput = { width: "100%", padding: "10px", marginTop: "8px", marginBottom: "15px", borderRadius: "8px", border: "1px solid #CBD5E1", boxSizing: "border-box" };
   const labelStyle = { fontSize: "14px", fontWeight: "bold", color: "#475569", display: "block" };
   const cancelBtn = { backgroundColor: "#94A3B8", color: "white", border: "none", padding: "10px 15px", borderRadius: "8px", marginRight: "10px", cursor: "pointer" };
@@ -153,7 +169,15 @@ function PendingAccounts() {
               Approving: <strong>{selectedAccount?.name}</strong>
             </p>
 
-            {/* لا تظهر السنة الدراسية إلا لو كان المستخدم طالب */}
+            <label style={labelStyle}>Password</label>
+            <input 
+              type="password" 
+              placeholder="Set password (min 6 chars)" 
+              style={modalInput} 
+              value={studentDetails.password}
+              onChange={(e) => setStudentDetails({ ...studentDetails, password: e.target.value })}
+            />
+
             {selectedAccount?.role === "student" && (
               <>
                 <label style={labelStyle}>Academic Level</label>

@@ -8,6 +8,7 @@ import {
   updateDoc,
   query,
   where,
+  orderBy, // تم إضافة orderBy هنا
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate } from "react-router-dom";
@@ -46,7 +47,6 @@ const Subjects = () => {
 
   const [newSubject, setNewSubject] = useState(emptySubject);
 
-  // --- دالة الـ Select All الجديدة ---
   const toggleSelectAllStudents = (filteredStudents) => {
     const filteredIds = filteredStudents.map((s) => s.id);
     const allSelected = filteredIds.every((id) =>
@@ -62,9 +62,13 @@ const Subjects = () => {
     }
   };
 
+  // --- الدالة المحدثة للترتيب الأبجدي ---
   const loadSubjects = async () => {
     try {
-      const snapshot = await getDocs(collection(db, "courses"));
+      // تعديل الاستعلام ليقوم بالترتيب حسب الاسم تصاعدياً (أبجدياً)
+      const q = query(collection(db, "courses"), orderBy("name", "asc"));
+      const snapshot = await getDocs(q);
+      
       const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setSubjects(list);
 
@@ -239,7 +243,6 @@ const Subjects = () => {
             <tr>
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Code</th>
-              <th style={thStyle}>Level</th>
               <th style={thStyle}>Actions</th>
             </tr>
           </thead>
@@ -263,9 +266,6 @@ const Subjects = () => {
                   </td>
                   <td style={tdStyle}>{subject.code}</td>
                   <td style={tdStyle}>
-                    <span style={badgeStyle}>{subject.level}</span>
-                  </td>
-                  <td style={tdStyle}>
                     <button
                       style={assignInsBtn}
                       onClick={() => {
@@ -274,7 +274,7 @@ const Subjects = () => {
                         setShowAssignInsModal(true);
                       }}
                     >
-                      Instructors
+                      Assign Instructors
                     </button>
                     <button
                       style={instructorBtn}
@@ -293,10 +293,10 @@ const Subjects = () => {
                       style={viewBtn}
                       onClick={() => openEnrollModal(subject.id)}
                     >
-                      Students
+                      Enroll Students
                     </button>
                     <button
-                      style={viewBtn}
+                      style={instructorBtn}
                       onClick={() =>
                         navigate(`/admin/subject-students/${subject.id}`)
                       }
@@ -376,7 +376,7 @@ const Subjects = () => {
         </div>
       )}
 
-      {/* 2. Assign Students Modal + SELECT ALL BUTTON */}
+      {/* 2. Enroll Students Modal */}
       {showEnrollModal && (
         <div style={overlayStyle}>
           <div style={{ ...modalStyle, width: "600px" }}>
