@@ -6,6 +6,7 @@ import { initializeApp, deleteApp } from "firebase/app";
 
 function PendingAccounts() {
   const [pendingAccounts, setPendingAccounts] = useState([]);
+  const [existingDepartments, setExistingDepartments] = useState([]); // State لحفظ الأقسام الموجودة
 
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -16,20 +17,26 @@ function PendingAccounts() {
   });
 
   useEffect(() => {
+    // 1. جلب طلبات الحسابات المعلقة
     const q = query(collection(db, "emailRequests"), where("status", "==", "pending"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubRequests = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // التعديل هنا: ترتيب البيانات بحيث الأقدم (تاريخياً) يظهر أولاً
-      const sortedData = data.sort((a, b) => {
-        const dateA = a.createdAt?.seconds || 0;
-        const dateB = b.createdAt?.seconds || 0;
-        return dateA - dateB; // الأقدم فوق
-      });
-
+      const sortedData = data.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
       setPendingAccounts(sortedData);
     });
-    return () => unsubscribe();
+
+    // 2. جلب الأقسام الفريدة من جدول المستخدمين (ديناميكياً)
+    const unsubDepts = onSnapshot(collection(db, "users"), (snapshot) => {
+      const depts = snapshot.docs.map(doc => doc.data().department);
+      // استخدام Set لإزالة التكرار و filter لإزالة القيم الفارغة
+      const uniqueDepts = [...new Set(depts)].filter(d => d);
+      setExistingDepartments(uniqueDepts);
+    });
+
+    return () => {
+      unsubRequests();
+      unsubDepts();
+    };
   }, []);
 
   const handleOpenApproveModal = (account) => {
@@ -44,7 +51,7 @@ function PendingAccounts() {
         return;
     }
     if (!studentDetails.department) {
-        alert("Please select a Department!");
+        alert("Please select or type a Department!");
         return;
     }
     if (selectedAccount.role === "student" && !studentDetails.academicYear) {
@@ -59,7 +66,6 @@ function PendingAccounts() {
       let userCredential;
       try {
         userCredential = await createUserWithEmailAndPassword(secondaryAuth, selectedAccount.email, studentDetails.password);
-        
         await signOut(secondaryAuth);
         await deleteApp(secondaryApp);
       } catch (authError) {
@@ -83,7 +89,7 @@ function PendingAccounts() {
         role: selectedAccount.role, 
         status: "active",
         createdAt: new Date(),
-        department: studentDetails.department,
+        department: studentDetails.department.toUpperCase(), // توحيد الحروف لتكون Capital
         uid: newUserUID
       };
 
@@ -195,18 +201,20 @@ function PendingAccounts() {
               </>
             )}
 
+            {/* الحقل الديناميكي للقسم */}
             <label style={labelStyle}>Department</label>
-            <select
+            <input
+              list="dept-list" // ربط الحقل بالقائمة بالأسفل
               style={modalInput}
+              placeholder="Type or select department"
               value={studentDetails.department}
               onChange={(e) => setStudentDetails({ ...studentDetails, department: e.target.value })}
-            >
-              <option value="">-- Choose Department --</option>
-              <option value="CS">CS</option>
-              <option value="IS">IS</option>
-              <option value="CHEMISTRY">CHEMISTRY</option>
-              <option value="MATHIMATICS">MATHIMATICS</option>
-            </select>
+            />
+            <datalist id="dept-list">
+              {existingDepartments.map((dept, index) => (
+                <option key={index} value={dept} />
+              ))}
+            </datalist>
 
             <div style={{ textAlign: "right", marginTop: "10px" }}>
               <button style={cancelBtn} onClick={() => setShowApproveModal(false)}>Cancel</button>
