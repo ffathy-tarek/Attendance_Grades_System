@@ -68,7 +68,7 @@ const Subjects = () => {
       // تعديل الاستعلام ليقوم بالترتيب حسب الاسم تصاعدياً (أبجدياً)
       const q = query(collection(db, "courses"), orderBy("name", "asc"));
       const snapshot = await getDocs(q);
-      
+
       const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setSubjects(list);
 
@@ -274,7 +274,7 @@ const Subjects = () => {
                         setShowAssignInsModal(true);
                       }}
                     >
-                      Assign Instructors
+                      Instructors
                     </button>
                     <button
                       style={instructorBtn}
@@ -293,7 +293,7 @@ const Subjects = () => {
                       style={viewBtn}
                       onClick={() => openEnrollModal(subject.id)}
                     >
-                      Enroll Students
+                      Students
                     </button>
                     <button
                       style={instructorBtn}
