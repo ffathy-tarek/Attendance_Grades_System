@@ -274,7 +274,7 @@ const Subjects = () => {
                         setShowAssignInsModal(true);
                       }}
                     >
-                      Instructors
+                      Manage Instructors
                     </button>
                     <button
                       style={instructorBtn}
@@ -293,7 +293,7 @@ const Subjects = () => {
                       style={viewBtn}
                       onClick={() => openEnrollModal(subject.id)}
                     >
-                      Students
+                      Manage Students
                     </button>
                     <button
                       style={instructorBtn}
