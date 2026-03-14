@@ -78,9 +78,17 @@ const SubjectStudents = () => {
 
   return (
     <div style={{ padding: "30px" }}>
+      {/* تعديل زر الباك ليكون في الأعلى مع أيقونة سهم */}
+      <button 
+        style={backBtn} 
+        onClick={() => navigate(-1)}
+      >
+        <span style={{ fontSize: "18px" }}>←</span> Back to Subjects
+      </button>
+
       <div style={headerStyle}>
         <div>
-          <h2>
+          <h2 style={{ margin: 0 }}>
             <span style={subjectTitle}>
               {loading ? "Loading..." : subjectName}
             </span>
@@ -92,10 +100,6 @@ const SubjectStudents = () => {
             Total students: <strong>{students.length}</strong>
           </p>
         </div>
-
-        <button style={backBtn} onClick={() => navigate(-1)}>
-          Back
-        </button>
       </div>
 
       <div style={cardStyle}>
@@ -131,6 +135,8 @@ const SubjectStudents = () => {
   );
 };
 
+// --- Styles المحدثة ---
+
 const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
@@ -157,13 +163,22 @@ const countStyle = {
   fontSize: "15px",
 };
 
+// ستايل زر الباك الجديد مع تحسينات بصرية
 const backBtn = {
-  background: "#1E3A8A",
-  color: "white",
-  border: "none",
-  padding: "8px 15px",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  background: "white",
+  color: "#1E3A8A",
+  border: "1px solid #E2E8F0",
+  padding: "8px 16px",
   borderRadius: "8px",
   cursor: "pointer",
+  fontSize: "14px",
+  fontWeight: "600",
+  marginBottom: "20px",
+  transition: "all 0.2s ease",
+  boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
 };
 
 const cardStyle = {
@@ -183,11 +198,13 @@ const thStyle = {
   padding: "14px",
   backgroundColor: "#F1F5F9",
   fontWeight: "600",
+  color: "#475569",
 };
 
 const tdStyle = {
   padding: "14px",
   borderTop: "1px solid #E2E8F0",
+  fontSize: "14px",
 };
 
 const badgeStyle = {
@@ -196,12 +213,14 @@ const badgeStyle = {
   padding: "5px 12px",
   borderRadius: "20px",
   fontSize: "13px",
+  fontWeight: "600",
 };
 
 const emptyStyle = {
-  padding: "25px",
+  padding: "40px",
   textAlign: "center",
   color: "#64748B",
+  fontSize: "15px",
 };
 
 export default SubjectStudents;

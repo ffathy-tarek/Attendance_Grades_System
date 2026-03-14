@@ -14,12 +14,17 @@ const Sidebar = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  // دالة تسجيل الخروج مع رسالة تأكيد
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate("/login");
-    } catch (error) {
-      alert(error.message);
+    const confirmLogout = window.confirm("Are you sure you want to logout?");
+    
+    if (confirmLogout) {
+      try {
+        await signOut(auth);
+        navigate("/login");
+      } catch (error) {
+        alert(error.message);
+      }
     }
   };
 
@@ -104,7 +109,7 @@ const Sidebar = () => {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Change Password Modal */}
       {showModal && (
         <div style={modalOverlay}>
           <div style={modalContent}>
@@ -153,7 +158,7 @@ const Sidebar = () => {
   );
 };
 
-/* ===== Styles (مستقرة كما هي بطلبك) ===== */
+/* ===== Styles ===== */
 
 const sidebarStyle = {
   width: "230px",
@@ -237,7 +242,7 @@ const inputStyle = {
   marginTop: "10px",
   borderRadius: "6px",
   border: "1px solid #ccc",
-  boxSizing: "border-box", // لضمان عدم خروج الإنبوت عن حدود المودال
+  boxSizing: "border-box",
 };
 
 const saveBtn = {

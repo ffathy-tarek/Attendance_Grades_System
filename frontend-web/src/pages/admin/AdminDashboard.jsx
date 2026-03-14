@@ -42,7 +42,7 @@ const AdminDashboard = () => {
         </div>
         <div>
           <span style={roleBadgeStyle}>
-            Role: {"ِAdmin"}
+            Role: {"Admin"}
           </span>
         </div>
       </div>

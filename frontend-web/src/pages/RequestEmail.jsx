@@ -61,7 +61,7 @@ const RequestEmail = () => {
         createdAt: serverTimestamp(), // server time
       });
 
-      alert("Thank you, we will send your sign-in info to your email soon");
+      alert("Thank you, Request sent successfully.");
 
       setName("");
       setCode("");

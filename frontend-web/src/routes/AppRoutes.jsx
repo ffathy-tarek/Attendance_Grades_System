@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext.jsx"; // التعديل هنا
+import { useAuth } from "../context/AuthContext.jsx";
 
 import Login from "../pages/Login.jsx";
 import Dashboard from "../pages/Dashboard.jsx";
@@ -15,14 +15,28 @@ import Subjects from "../pages/admin/Subjects.jsx";
 import PendingAccounts from "../pages/admin/PendingAccounts.jsx";
 import SubjectStudents from "../pages/admin/SubjectStudents.jsx";
 
-// مكون حماية المسارات (فقط للأدمن)
+// 1. صفحة بسيطة للـ 404 أو الوصول الممنوع
+const NotFound = () => (
+  <div style={{ textAlign: 'center', marginTop: '100px' }}>
+    <h1>404 - Page Not Found</h1>
+    <p>Sorry, you don't have permission to access this page.</p>
+  </div>
+);
+
+// مكون حماية المسارات المطور
 const ProtectedAdminRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) return null; 
 
-  if (!user || user.role !== "admin") {
+  // حالة 1: المستخدم مش مسجل دخول أصلاً
+  if (!user) {
     return <Navigate replace to="/login" />;
+  }
+
+  // حالة 2: المستخدم مسجل دخول بس "مش أدمن" (طالب مثلاً) وحاول يدخل لينك أدمن
+  if (user.role !== "admin") {
+    return <Navigate replace to="/404" />; // يوديه لصفحة 404 بدل اللوج إن
   }
 
   return children;
@@ -54,6 +68,12 @@ const AppRoutes = () => {
           <Route path="pending-accounts" element={<PendingAccounts />} />
           <Route path="subject-students/:id" element={<SubjectStudents />} />
         </Route>
+
+        {/* مسار صفحة الـ 404 */}
+        <Route path="/404" element={<NotFound />} />
+        
+        {/* أي مسار غير معروف يروح للـ 404 */}
+        <Route path="*" element={<Navigate to="/404" replace />} />
       </Routes>
     </BrowserRouter>
   );

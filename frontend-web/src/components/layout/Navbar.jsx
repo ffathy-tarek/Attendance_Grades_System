@@ -7,8 +7,9 @@ const Navbar = () => {
       alignItems: "center",
       padding: "0 20px",
       borderBottom: "1px solid #CBD5E1"
+      
     }}>
-      <h3>Attendance System</h3>
+      <h3>Attendance & Grades System</h3>
     </div>
   );
 };
