@@ -31,8 +31,10 @@ const Login = () => {
         // 3. التوجيه الذكي بناءً على الرول
         if (role === "admin") {
           navigate("/admin");
+        } else if (role === "student") {
+          navigate("/student"); // الطالب يروح StudentDashboard
         } else {
-          navigate("/dashboard");
+          navigate("/404"); // أي role غير معروف
         }
       } else {
         alert("User data not found in database.");
@@ -61,7 +63,7 @@ const Login = () => {
         <Input
           label="Password"
           type="password"
-          placeholder="Enter your password "
+          placeholder="Enter your password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
