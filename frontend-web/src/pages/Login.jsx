@@ -53,7 +53,7 @@ const Login = () => {
 
         <Input
           label="Email"
-          placeholder="Ex: ****@std.sci.edu.eg"
+          placeholder="Ex: ---@---.sci.edu.eg"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
@@ -95,7 +95,6 @@ const Login = () => {
               border: "none",
               color: "#110a96",
               cursor: "pointer",
-              textDecoration: "underline",
               fontSize: "0.9rem",
             }}
           >
@@ -110,7 +109,6 @@ const Login = () => {
               border: "none",
               color: "#110a96",
               cursor: "pointer",
-              textDecoration: "underline",
               fontSize: "0.9rem",
             }}
           >
