@@ -1,32 +1,71 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
 import { getCourseById, getGradeDetails } from './coursesData';
+import { useAuth } from '../../context/AuthContext';
 
 const CourseDetails = () => {
   const { courseId } = useParams();
-  const course = getCourseById(courseId);
-  const gradeDetails = getGradeDetails(courseId);
+  const { user } = useAuth();
+  const [course, setCourse] = useState(null);
+  const [gradeDetails, setGradeDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadCourseDetails = async () => {
+      if (!user?.uid || !courseId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const [courseData, gradeData] = await Promise.all([
+          getCourseById(courseId),
+          getGradeDetails(user.uid, courseId)
+        ]);
+
+        setCourse(courseData);
+        setGradeDetails(gradeData);
+      } catch (error) {
+        console.error('Error loading course details:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCourseDetails();
+  }, [user?.uid, courseId]);
+
+  if (loading) {
+    return (
+      <PageLayout>
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+        </div>
+      </PageLayout>
+    );
+  }
 
   if (!course) {
     return (
       <PageLayout>
         <div className={styles.emptyState}>
           <h3>Course Not Found</h3>
-          <p>The course you're looking for doesn't exist.</p>
+          <p>The course you're looking for doesn't exist or you're not enrolled in it.</p>
         </div>
       </PageLayout>
     );
   }
 
-  const attendedLectures = course.lectures.filter(l => l.attended).length;
-  const attendanceRate = ((attendedLectures / course.lectures.length) * 100).toFixed(1);
+  const attendedLectures = course.lectures?.filter(l => l.attended).length || 0;
+  const totalLectures = course.lectures?.length || 0;
+  const attendanceRate = totalLectures > 0 ? ((attendedLectures / totalLectures) * 100).toFixed(1) : 0;
 
-  const finalScore = course.grades.final || 0;
-  const midtermScore = course.grades.midterm || 0;
-  const quizzesScore = (course.grades.quiz1 || 0) + (course.grades.quiz2 || 0) + (course.grades.quiz3 || 0);
+  const finalScore = course.grades?.final || 0;
+  const midtermScore = course.grades?.midterm || 0;
+  const quizzesScore = (course.grades?.quiz1 || 0) + (course.grades?.quiz2 || 0) + (course.grades?.quiz3 || 0);
   const totalGrade = ((finalScore + midtermScore + quizzesScore) / 100) * 100;
 
   return (
@@ -78,7 +117,6 @@ const CourseDetails = () => {
           gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
           gap: '20px'
         }}>
-          {/* Final Exam */}
           <GradeCard 
             title="Final Exam"
             score={finalScore}
@@ -87,7 +125,6 @@ const CourseDetails = () => {
             icon="📚"
           />
 
-          {/* Midterm */}
           <GradeCard 
             title="Midterm Exam"
             score={midtermScore}
@@ -96,34 +133,30 @@ const CourseDetails = () => {
             icon="📖"
           />
 
-          {/* Quiz 1 */}
           <GradeCard 
             title="Quiz 1"
-            score={course.grades.quiz1 || 0}
+            score={course.grades?.quiz1 || 0}
             maxScore={10}
             color="#059669"
             icon="📝"
           />
 
-          {/* Quiz 2 */}
           <GradeCard 
             title="Quiz 2"
-            score={course.grades.quiz2 || 0}
+            score={course.grades?.quiz2 || 0}
             maxScore={10}
             color="#d97706"
             icon="📝"
           />
 
-          {/* Quiz 3 */}
           <GradeCard 
             title="Quiz 3"
-            score={course.grades.quiz3 || 0}
+            score={course.grades?.quiz3 || 0}
             maxScore={10}
             color="#dc2626"
             icon="📝"
           />
 
-    
           <div className={styles.courseCard} style={{ padding: '20px', borderTop: '4px solid #0f172a', gridColumn: 'span 2' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -156,7 +189,7 @@ const CourseDetails = () => {
           <div className={styles.statIcon} style={{ background: '#fef9c3' }}>📚</div>
           <div>
             <div className={styles.statLabel}>Total Lectures & Labs</div>
-            <div className={styles.statValue}>{course.lectures.length}</div>
+            <div className={styles.statValue}>{totalLectures}</div>
           </div>
         </div>
       </div>
@@ -178,7 +211,7 @@ const CourseDetails = () => {
         gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
         gap: '20px'
       }}>
-        {course.lectures.map((lec, idx) => (
+        {course.lectures?.map((lec, idx) => (
           <div key={idx} className={styles.courseCard} style={{ 
             padding: '20px',
             borderLeft: lec.attended ? '4px solid #059669' : '4px solid #dc2626'
@@ -221,7 +254,6 @@ const CourseDetails = () => {
     </PageLayout>
   );
 };
-
 
 const GradeCard = ({ title, score, maxScore, color, icon }) => (
   <div className={styles.courseCard} style={{ padding: '20px', borderTop: `4px solid ${color}` }}>

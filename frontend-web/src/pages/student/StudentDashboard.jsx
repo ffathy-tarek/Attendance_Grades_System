@@ -1,5 +1,4 @@
-// src/studentDashboard/pages/StudentDashboard.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
 import { useAuth } from '../../context/AuthContext';
@@ -7,8 +6,53 @@ import { getCoursesForDashboard, getTotalStats } from './coursesData';
 
 const StudentDashboard = () => {
   const { user } = useAuth();
-  const courses = getCoursesForDashboard();
-  const stats = getTotalStats();
+  const [courses, setCourses] = useState([]);
+  const [stats, setStats] = useState({
+    totalCourses: 0,
+    averageAttendance: 0,
+    perfectAttendance: 0,
+    needingAttention: 0,
+    totalLectures: 0,
+    totalPresent: 0,
+    totalAbsences: 0,
+    averageGrade: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const [coursesData, statsData] = await Promise.all([
+          getCoursesForDashboard(user.uid),
+          getTotalStats(user.uid)
+        ]);
+
+        setCourses(coursesData || []);
+        setStats(statsData || {
+          totalCourses: 0,
+          averageAttendance: 0,
+          perfectAttendance: 0,
+          needingAttention: 0,
+          totalLectures: 0,
+          totalPresent: 0,
+          totalAbsences: 0,
+          averageGrade: 0
+        });
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, [user?.uid]);
 
   const handleTakeAttendance = (course) => {
     alert(`Starting attendance for ${course.name} with ${course.professor}`);
@@ -29,11 +73,21 @@ const StudentDashboard = () => {
 
   const getWarningMessage = (attendance) => {
     const absence = 100 - attendance;
-    if (absence >25) return '🚫 تم حرمانك من المادة';
-    if (absence == 25) return '⚠️ لديك إنذار ثاني في المادة';
+    if (absence > 25) return '🚫 تم حرمانك من المادة';
+    if (absence === 25) return '⚠️ لديك إنذار ثاني في المادة';
     if (absence >= 15) return '⚠️ لديك إنذار أول في المادة';
     return '';
   };
+
+  if (loading) {
+    return (
+      <PageLayout>
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+        </div>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout>
@@ -67,7 +121,7 @@ const StudentDashboard = () => {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(1, 1fr)',
+        gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '20px',
         marginBottom: '32px',
         padding: '0 32px'
@@ -77,6 +131,24 @@ const StudentDashboard = () => {
           bgColor="#e0f2fe"
           label="Total Courses"
           value={stats.totalCourses}
+        />
+        <StatCard 
+          icon="📊"
+          bgColor="#dcfce7"
+          label="Avg Attendance"
+          value={`${stats.averageAttendance}%`}
+        />
+        <StatCard 
+          icon="✅"
+          bgColor="#fef9c3"
+          label="Perfect Attendance"
+          value={stats.perfectAttendance}
+        />
+        <StatCard 
+          icon="⚠️"
+          bgColor="#fee2e2"
+          label="Need Attention"
+          value={stats.needingAttention}
         />
       </div>
 
@@ -90,50 +162,55 @@ const StudentDashboard = () => {
           <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#0f172a' }}>
             Your Courses
           </h2>
-         
-            
         </div>
 
         <div className={styles.coursesGrid}>
-          {courses.map(course => {
-            const warning = getWarningMessage(course.attendance);
-            return (
-              <div key={course.id} className={styles.courseCard}>
-                {warning && (
-                  <div style={{
-                    background: '#fee2e2',
-                    color: '#b91c1c',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    marginBottom: '8px'
-                  }}>
-                    {warning} في {course.name}
+          {courses.length > 0 ? (
+            courses.map(course => {
+              const warning = getWarningMessage(course.attendance);
+              return (
+                <div key={course.id} className={styles.courseCard}>
+                  {warning && (
+                    <div style={{
+                      background: '#fee2e2',
+                      color: '#b91c1c',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontWeight: '600',
+                      marginBottom: '8px',
+                      fontSize: '12px'
+                    }}>
+                      {warning}
+                    </div>
+                  )}
+                  <div className={styles.courseHeader}>
+                    <span className={styles.courseCode}>{course.icon}</span>
+                    <span 
+                      className={styles.courseHours}
+                      style={{ background: getAttendanceColor(course.attendance) }}
+                    >
+                      {course.attendance}%
+                    </span>
                   </div>
-                )}
-                <div className={styles.courseHeader}>
-                  <span className={styles.courseCode}>{course.icon}</span>
-                  <span 
-                    className={styles.courseHours}
-                    style={{ background: getAttendanceColor(course.attendance) }}
-                  >
-                    {course.attendance}%
-                  </span>
-                </div>
 
-                <div className={styles.courseBody}>
-                  <h3 className={styles.courseName}>{course.name}</h3>
-                  <p className={styles.courseInstructor}>👨‍🏫 {course.professor}</p>
-                  <button
-                    className={styles.courseButton}
-                    onClick={() => handleTakeAttendance(course)}
-                  >
-                    Take Attendance
-                  </button>
+                  <div className={styles.courseBody}>
+                    <h3 className={styles.courseName}>{course.name}</h3>
+                    <p className={styles.courseInstructor}>👨‍🏫 {course.professor}</p>
+                    <button
+                      className={styles.courseButton}
+                      onClick={() => handleTakeAttendance(course)}
+                    >
+                      Take Attendance
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#64748b', gridColumn: '1/-1' }}>
+              لا توجد مواد مسجلة
+            </div>
+          )}
         </div>
       </div>
     </PageLayout>
