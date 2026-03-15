@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform } from 'react-native';
 import { db } from '../firebaseConfig';
 
 export default function AddRequest() {
@@ -11,50 +11,61 @@ export default function AddRequest() {
     const [nationalId, setNationalId] = useState('');
     const [uniCode, setUniCode] = useState('');
     const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
     const submitData = async () => {
-      // 1. التأكد من إدخال جميع البيانات
-      if (!name || !nationalId || !email || !password) {
-        return Alert.alert("Input Error", "All fields are required!");
+      // 1. فحص البيانات (بدون باسورد)
+      if (!name || !nationalId || !email) {
+        const msg = "All fields are required!";
+        if (Platform.OS === 'web') {
+            alert(msg);
+        } else {
+            Alert.alert("Input Error", msg);
+        }
+        return;
       }
 
-      // 2. فحص طول رقم البطاقة
       if (nationalId.length !== 14) {
-        return Alert.alert("Security Error", "National ID must be exactly 14 digits!");
-      }
-
-      // 3. فحص كود الجامعة إذا كان المتقدم طالباً
-      if (role === 'student' && !uniCode) {
-        return Alert.alert("Input Error", "Please enter your University Code!");
-      }
-
-      // 4. فحص صيغة الإيميل باستخدام Regex
-      const emailRegex = /\S+@\S+\.\S+/;
-      if (!emailRegex.test(email.trim())) {
-        return Alert.alert("Format Error", "Please enter a valid email address!");
+        const msg = "National ID must be exactly 14 digits!";
+        if (Platform.OS === 'web') {
+            alert(msg);
+        } else {
+            Alert.alert("Security Error", msg);
+        }
+        return;
       }
 
       setLoading(true);
       try {
-        await addDoc(collection(db, "requests"), {
-          fullName: name,
-          nationalID: nationalId,
+        await addDoc(collection(db, "emailRequests"), {
+          name: name,             
+          nationalId: nationalId, 
           role: role,
-          universityCode: role === 'student' ? uniCode : "N/A",
+          code: role === 'student' ? uniCode : "N/A", 
           email: email.trim().toLowerCase(),
-          password: password, 
           status: "pending",
           type: "new_registration",
           createdAt: serverTimestamp()
         });
+
         setLoading(false);
-        Alert.alert("Success", "Request sent! Wait for Admin approval.");
-        router.back();
+        const successMsg = "Request sent! Wait for Admin approval.";
+        
+        if (Platform.OS === 'web') {
+            alert(successMsg);
+            router.back();
+        } else {
+            Alert.alert("Success", successMsg, [{ text: "OK", onPress: () => router.back() }]);
+        }
+
       } catch (e) {
         setLoading(false);
-        Alert.alert("Firebase Error", "Failed to send request. Check your connection.");
+        const errorMsg = "Failed to send request. Check your connection.";
+        if (Platform.OS === 'web') {
+            alert(errorMsg);
+        } else {
+            Alert.alert("Error", errorMsg);
+        }
       }
     };
 
@@ -64,22 +75,10 @@ export default function AddRequest() {
           <Text style={styles.title}>Create New Request</Text>
           
           <Text style={styles.label}>Full Name</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="Enter your name" 
-            placeholderTextColor="#999" 
-            onChangeText={setName} 
-          />
+          <TextInput style={styles.input} placeholder="Enter your name" placeholderTextColor="#999" onChangeText={setName} />
           
           <Text style={styles.label}>National ID (14 Digits)</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="305xxxxxxxxxxx" 
-            placeholderTextColor="#999" 
-            keyboardType="numeric" 
-            maxLength={14} 
-            onChangeText={setNationalId} 
-          />
+          <TextInput style={styles.input} placeholder="305xxxxxxxxxxx" placeholderTextColor="#999" keyboardType="numeric" maxLength={14} onChangeText={setNationalId} />
 
           <Text style={styles.label}>Role Selection</Text>
           <View style={styles.roleRow}>
@@ -94,13 +93,7 @@ export default function AddRequest() {
           {role === 'student' && (
             <>
               <Text style={styles.label}>University ID Code</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="Ex: 20210001" 
-                placeholderTextColor="#999" 
-                keyboardType="numeric" 
-                onChangeText={setUniCode} 
-              />
+              <TextInput style={styles.input} placeholder="Ex: 20210001" placeholderTextColor="#999" keyboardType="numeric" onChangeText={setUniCode} />
             </>
           )}
 
@@ -114,24 +107,19 @@ export default function AddRequest() {
             onChangeText={setEmail} 
           />
 
-          <Text style={styles.label}>Account Password</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="Create a strong password" 
-            placeholderTextColor="#999" 
-            secureTextEntry={true} 
-            onChangeText={setPassword} 
-          />
-
           <TouchableOpacity style={styles.btn} onPress={submitData} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Send Join Request</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20 }}>
+            <Text style={{ color: '#1a3a8a', textAlign: 'center', fontWeight: 'bold' }}>Cancel & Back</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
     );
-  }
+}
 
-  const styles = StyleSheet.create({
+const styles = StyleSheet.create({
     container: { flexGrow: 1, backgroundColor: '#f0f2f5', justifyContent: 'center', padding: 20 },
     card: { backgroundColor: '#fff', borderRadius: 20, padding: 25, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10 },
     title: { fontSize: 24, fontWeight: 'bold', color: '#1a3a8a', marginBottom: 25, textAlign: 'center' },
@@ -144,4 +132,4 @@ export default function AddRequest() {
     activeText: { color: '#fff' },
     btn: { height: 55, backgroundColor: '#1a3a8a', justifyContent: 'center', alignItems: 'center', borderRadius: 12, marginTop: 10 },
     btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
-  });
+});

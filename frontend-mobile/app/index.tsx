@@ -1,6 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
 import { auth } from '../firebaseConfig'; 
 import { signInWithEmailAndPassword } from "firebase/auth";
 
@@ -11,7 +11,11 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = () => {
-    if (!emailInput || !pass) return Alert.alert("Missing Data", "Please enter Email and Password");
+    if (!emailInput || !pass) {
+        const msg = "Please enter Email and Password";
+        return Platform.OS === 'web' ? alert(msg) : Alert.alert("Missing Data", msg);
+    }
+    
     setLoading(true);
     signInWithEmailAndPassword(auth, emailInput.trim(), pass)
       .then(() => {
@@ -20,7 +24,8 @@ export default function LoginScreen() {
       })
       .catch(() => {
         setLoading(false);
-        Alert.alert("Login Failed", "The email or password you entered is incorrect.");
+        const failMsg = "The email or password you entered is incorrect.";
+        Platform.OS === 'web' ? alert(failMsg) : Alert.alert("Login Failed", failMsg);
       });
   };
 
