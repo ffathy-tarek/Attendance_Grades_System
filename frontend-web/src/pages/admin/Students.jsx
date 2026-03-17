@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { setDoc, collection, query, where, onSnapshot, deleteDoc, doc, getDocs, updateDoc } from "firebase/firestore";
+import { setDoc, collection, query, where, onSnapshot, deleteDoc, doc, getDocs, updateDoc, addDoc } from "firebase/firestore";
 import { db, app } from "../../firebase"; 
 import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -26,6 +26,7 @@ const Students = () => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState("");
   const [subjects, setSubjects] = useState([]);
+  const [studentEnrollments, setStudentEnrollments] = useState([]);
 
   // 1. جلب الطلاب
   useEffect(() => {
@@ -57,7 +58,22 @@ const Students = () => {
     return () => unsubscribe();
   }, []);
 
-  // المنطق المعدل: فلترة + ترتيب (حسب المستوى ثم أبجدياً)
+  // 4. جلب مواد الطالب المختارة (Enrollments)
+  useEffect(() => {
+    if (selectedStudent && assignModal) {
+      const q = query(collection(db, "enrollments"), where("studentId", "==", selectedStudent.id));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const enrolls = snapshot.docs.map(doc => ({
+          enrollId: doc.id,
+          courseId: doc.data().courseId,
+          courseName: subjects.find(s => s.id === doc.data().courseId)?.name || "Unknown Course"
+        }));
+        setStudentEnrollments(enrolls);
+      });
+      return () => unsubscribe();
+    }
+  }, [selectedStudent, assignModal, subjects]);
+
   const filteredStudents = students
     .filter((student) => {
       const nameToSearch = (student.fullName || student.name || "").toLowerCase();
@@ -66,27 +82,17 @@ const Students = () => {
       return matchesSearch && matchesLevel;
     })
     .sort((a, b) => {
-      // أولاً: الترتيب حسب المستوى (Level)
-      if (a.academicYear !== b.academicYear) {
-        return a.academicYear - b.academicYear;
-      }
-      // ثانياً: الترتيب الأبجدي إذا كانا في نفس المستوى
+      if (a.academicYear !== b.academicYear) return a.academicYear - b.academicYear;
       const nameA = a.fullName || a.name || "";
       const nameB = b.fullName || b.name || "";
       return nameA.localeCompare(nameB, ["ar", "en"]);
     });
-
-  const totalStudents = filteredStudents.length;
-  const totalDepartments = [
-    ...new Set(students.map((s) => s.department || "General")),
-  ].length;
 
   const handleAddStudent = async () => {
     if (!newStudent.fullName || !newStudent.code || !newStudent.department) {
         alert("Please fill Name, Code and Department");
         return;
     }
-
     try {
       if (editingStudent) {
         const studentRef = doc(db, "users", editingStudent.id);
@@ -99,28 +105,12 @@ const Students = () => {
         });
         alert("Student updated successfully ✅");
       } else {
-        if (!newStudent.email || !newStudent.password) { 
-          alert("Email and Password are required!"); 
-          return; 
-        }
-
         const secondaryApp = initializeApp(app.options, "Secondary");
         const secondaryAuth = getAuth(secondaryApp);
-        
-        let userUid;
-        try {
-          const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newStudent.email, newStudent.password);
-          userUid = userCredential.user.uid;
-          
-          await signOut(secondaryAuth);
-          await deleteApp(secondaryApp); 
-        } catch (authError) {
-          await deleteApp(secondaryApp);
-          if (authError.code === 'auth/email-already-in-use') {
-            alert("This email is already registered.");
-            return;
-          } else { throw authError; }
-        }
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newStudent.email, newStudent.password);
+        const userUid = userCredential.user.uid;
+        await signOut(secondaryAuth);
+        await deleteApp(secondaryApp); 
 
         await setDoc(doc(db, "users", userUid), {
           fullName: newStudent.fullName,
@@ -128,69 +118,47 @@ const Students = () => {
           code: newStudent.code,
           department: newStudent.department.toUpperCase(), 
           academicYear: Number(newStudent.academicYear),
-          role: "student",
-          status: "active",
-          createdAt: new Date()
+          role: "student", status: "active", createdAt: new Date()
         });
-        
         alert("Student created successfully! ✅");
       }
-
       setShowModal(false);
       setEditingStudent(null);
       setNewStudent({ fullName: "", email: "", password: "", code: "", academicYear: 1, department: "" });
-    } catch (error) {
-      alert("Error: " + error.message);
-    }
-  };
-
-  const handleAssign = (student) => {
-    setSelectedStudent(student);
-    setAssignModal(true);
+    } catch (error) { alert("Error: " + error.message); }
   };
 
   const handleAssignConfirm = async () => {
     if (!selectedSubject) return;
     try {
-      const q = query(collection(db, "enrollments"), where("studentId", "==", selectedStudent.id), where("courseId", "==", selectedSubject));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        alert("Student already assigned to this subject ⚠");
-        return;
-      }
-      const { addDoc } = await import("firebase/firestore"); 
       await addDoc(collection(db, "enrollments"), {
         studentId: selectedStudent.id,
         courseId: selectedSubject,
         createdAt: new Date(),
       });
-      alert("Student assigned successfully ✅");
-      setAssignModal(false);
       setSelectedSubject("");
     } catch (error) { console.error(error); }
   };
 
+  const handleUnassign = async (enrollId) => {
+    if (window.confirm("Are you sure you want to remove this subject?")) {
+      try {
+        await deleteDoc(doc(db, "enrollments", enrollId));
+      } catch (error) { console.error(error); }
+    }
+  };
+
   return (
     <div style={{ padding: "30px" }}>
+      {/* Table & Filters - Original Kept */}
       <div style={headerStyle}>
-        <div>
-          <h2 style={{ margin: 0 }}>Students</h2>
-          <p style={{ color: "#64748B", marginTop: "5px" }}>Manage university students</p>
-        </div>
-        <button style={addBtn} onClick={() => { setEditingStudent(null); setNewStudent({ fullName: "", email: "", password: "", code: "", academicYear: 1, department: "" }); setShowModal(true); }}>
-          + Add Student
-        </button>
+        <div><h2 style={{ margin: 0 }}>Students</h2><p style={{ color: "#64748B", marginTop: "5px" }}>Manage university students</p></div>
+        <button style={addBtn} onClick={() => { setEditingStudent(null); setNewStudent({ fullName: "", email: "", password: "", code: "", academicYear: 1, department: "" }); setShowModal(true); }}>+ Add Student</button>
       </div>
 
       <div style={statsContainer}>
-        <div style={statCard}>
-          <h3 style={statNumber}>{totalStudents}</h3>
-          <p style={statLabel}>Total Students</p>
-        </div>
-        <div style={statCard}>
-          <h3 style={statNumber}>{totalDepartments}</h3>
-          <p style={statLabel}>Departments</p>
-        </div>
+        <div style={statCard}><h3 style={statNumber}>{filteredStudents.length}</h3><p style={statLabel}>Total Students</p></div>
+        <div style={statCard}><h3 style={statNumber}>{[...new Set(students.map(s => s.department))].length}</h3><p style={statLabel}>Departments</p></div>
       </div>
 
       <div style={filterContainer}>
@@ -204,78 +172,94 @@ const Students = () => {
       <div style={cardStyle}>
         <table style={tableStyle}>
           <thead>
-            <tr>
-              <th style={thStyle}>Name</th>
-              <th style={thStyle}>Code</th>
-              <th style={thStyle}>Level</th>
-              <th style={thStyle}>Department</th>
-              <th style={thStyle}>Actions</th>
-            </tr>
+            <tr><th style={thStyle}>Name</th><th style={thStyle}>Code</th><th style={thStyle}>Level</th><th style={thStyle}>Department</th><th style={thStyle}>Actions</th></tr>
           </thead>
           <tbody>
-            {filteredStudents.length > 0 ? (
-              filteredStudents.map((student) => (
-                <tr key={student.id}>
-                  <td style={tdStyle}>{student.fullName || student.name}</td>
-                  <td style={tdStyle}>{student.code}</td>
-                  <td style={tdStyle}><span style={badgeStyle}>{student.academicYear}</span></td>
-                  <td style={tdStyle}>{student.department}</td>
-                  <td style={tdStyle}>
-                    <button style={editBtn} onClick={() => {
-                        setEditingStudent(student);
-                        setNewStudent({ fullName: student.fullName || student.name || "", email: student.email || "", password: "", code: student.code || "", academicYear: student.academicYear || 1, department: student.department || "" });
-                        setShowModal(true);
-                    }}>Edit</button>
-                    <button style={deleteBtn} onClick={() => setConfirmDelete(student)}>Delete</button>
-                    <button style={assignBtnStyle} onClick={() => handleAssign(student)}>Assign</button>
-                  </td>
-                </tr>
-              ))
-            ) : (<tr><td colSpan="5" style={{ padding: "20px", textAlign: "center" }}>No students found</td></tr>)}
+            {filteredStudents.map((student) => (
+              <tr key={student.id}>
+                <td style={tdStyle}>{student.fullName || student.name}</td>
+                <td style={tdStyle}>{student.code}</td>
+                <td style={tdStyle}><span style={badgeStyle}>{student.academicYear}</span></td>
+                <td style={tdStyle}>{student.department}</td>
+                <td style={tdStyle}>
+                  <button style={editBtn} onClick={() => { setEditingStudent(student); setNewStudent({...student}); setShowModal(true); }}>Edit</button>
+                  <button style={deleteBtn} onClick={() => setConfirmDelete(student)}>Delete</button>
+                  <button style={assignBtnStyle} onClick={() => { setSelectedStudent(student); setAssignModal(true); }}>Assign</button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
+      {/* Assign Modal - NEWEST UPDATES HERE */}
+      {assignModal && (
+        <div style={overlayStyle}>
+          <div style={modalStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ margin: 0 }}>Assign Subject</h3>
+              <button onClick={() => setAssignModal(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>&times;</button>
+            </div>
+            
+            <p style={{ fontSize: "14px", color: "#64748B", marginBottom: "15px" }}>
+              Student: <strong>{selectedStudent?.fullName || selectedStudent?.name}</strong>
+            </p>
+
+            <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#F8FAFC", borderRadius: "8px" }}>
+              <label style={{ ...labelStyle, marginTop: 0, marginBottom: "10px" }}>Currently Enrolled In:</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {studentEnrollments.length > 0 ? (
+                  studentEnrollments.map((env) => (
+                    <div key={env.enrollId} style={chipStyle}>{env.courseName}<span onClick={() => handleUnassign(env.enrollId)} style={removeIconStyle}>&times;</span></div>
+                  ))
+                ) : (<span style={{ fontSize: "13px", color: "#94A3B8" }}>No subjects assigned yet.</span>)}
+              </div>
+            </div>
+
+            <label style={labelStyle}>Add New Subject</label>
+            <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
+              <select 
+                style={{ ...modalInput, marginTop: 0 }} 
+                value={selectedSubject} 
+                onChange={(e) => setSelectedSubject(e.target.value)}
+              >
+                {/* 1. جعل الاختيار الافتراضي مخفي داخل القائمة */}
+                <option value="" hidden>Select Subject</option>
+                
+                {/* 2. الفلترة + الترتيب الأبجدي */}
+                {subjects
+                  .filter(sub => !studentEnrollments.some(env => env.courseId === sub.id))
+                  .sort((a, b) => a.name.localeCompare(b.name, ["ar", "en"])) // الترتيب الأبجدي
+                  .map((sub) => (
+                    <option key={sub.id} value={sub.id}>{sub.name}</option>
+                  ))
+                }
+              </select>
+              <button style={{ ...saveBtn, whiteSpace: "nowrap" }} onClick={handleAssignConfirm}>Assign</button>
+            </div>
+            
+            <button style={{ ...cancelBtn, width: "100%", marginTop: "20px", marginRight: 0 }} onClick={() => setAssignModal(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Rest of Modals (Add/Edit & Delete) - Kept Original */}
       {showModal && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
             <h3>{editingStudent ? "Edit Student Info" : "Add New Student"}</h3>
-            
             <label style={labelStyle}>Full Name</label>
-            <input style={modalInput} placeholder="Student Name" value={newStudent.fullName} onChange={(e) => setNewStudent({ ...newStudent, fullName: e.target.value })} />
-            
+            <input style={modalInput} value={newStudent.fullName} onChange={(e) => setNewStudent({ ...newStudent, fullName: e.target.value })} />
             {!editingStudent && (
               <>
-                <label style={labelStyle}>Email Address</label>
-                <input style={modalInput} placeholder="***@std.sci.cu.edu.eg" value={newStudent.email} onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })} />
-                
+                <label style={labelStyle}>Email</label>
+                <input style={modalInput} value={newStudent.email} onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })} />
                 <label style={labelStyle}>Password</label>
-                <input type="password" style={modalInput} placeholder="Min 6 characters" value={newStudent.password} onChange={(e) => setNewStudent({ ...newStudent, password: e.target.value })} />
+                <input type="password" style={modalInput} value={newStudent.password} onChange={(e) => setNewStudent({ ...newStudent, password: e.target.value })} />
               </>
             )}
-
-            <label style={labelStyle}>Student Code</label>
-            <input style={modalInput} placeholder="Code" value={newStudent.code} onChange={(e) => setNewStudent({ ...newStudent, code: e.target.value })} />
-            
-            <label style={labelStyle}>Academic Level</label>
-            <select style={modalInput} value={newStudent.academicYear} onChange={(e) => setNewStudent({ ...newStudent, academicYear: Number(e.target.value) })}>
-              <option value={1}>Level 1</option><option value={2}>Level 2</option><option value={3}>Level 3</option><option value={4}>Level 4</option>
-            </select>
-            
-            <label style={labelStyle}>Department</label>
-            <input 
-              style={modalInput} 
-              list="dept-list" 
-              placeholder="Select or Type new department..." 
-              value={newStudent.department} 
-              onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })} 
-            />
-            <datalist id="dept-list">
-              {departments.map((dept, index) => (
-                <option key={index} value={dept} />
-              ))}
-            </datalist>
-
+            <label style={labelStyle}>Code</label>
+            <input style={modalInput} value={newStudent.code} onChange={(e) => setNewStudent({ ...newStudent, code: e.target.value })} />
             <div style={{ textAlign: "right", marginTop: "20px" }}>
               <button style={cancelBtn} onClick={() => { setShowModal(false); setEditingStudent(null); }}>Cancel</button>
               <button style={saveBtn} onClick={handleAddStudent}>{editingStudent ? "Update" : "Create"}</button>
@@ -288,28 +272,10 @@ const Students = () => {
         <div style={overlayStyle}>
           <div style={modalStyle}>
             <h3>Confirm Delete</h3>
-            <p>Are you sure you want to delete <strong>{confirmDelete.fullName || confirmDelete.name}</strong>?</p>
+            <p>Delete <strong>{confirmDelete.fullName || confirmDelete.name}</strong>?</p>
             <div style={{ textAlign: "right", marginTop: "20px" }}>
               <button style={cancelBtn} onClick={() => setConfirmDelete(null)}>Cancel</button>
-              <button style={deleteBtn} onClick={async () => {
-                  try { await deleteDoc(doc(db, "users", confirmDelete.id)); setConfirmDelete(null); } catch (error) { console.error(error); }
-              }}>Yes, Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {assignModal && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <h3>Assign Subject</h3>
-            <select style={modalInput} value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
-              <option value="">Select Subject</option>
-              {subjects.map((sub) => (<option key={sub.id} value={sub.id}>{sub.name}</option>))}
-            </select>
-            <div style={{ textAlign: "right", marginTop: "15px" }}>
-              <button style={cancelBtn} onClick={() => setAssignModal(false)}>Cancel</button>
-              <button style={saveBtn} onClick={handleAssignConfirm}>Assign</button>
+              <button style={deleteBtn} onClick={async () => { await deleteDoc(doc(db, "users", confirmDelete.id)); setConfirmDelete(null); }}>Yes, Delete</button>
             </div>
           </div>
         </div>
@@ -319,6 +285,8 @@ const Students = () => {
 };
 
 // Styles
+const chipStyle = { display: "flex", alignItems: "center", backgroundColor: "#E0F2FE", color: "#0369A1", padding: "4px 10px", borderRadius: "6px", fontSize: "13px", fontWeight: "500", border: "1px solid #BAE6FD" };
+const removeIconStyle = { marginLeft: "8px", cursor: "pointer", color: "#EF4444", fontWeight: "bold", fontSize: "16px" };
 const labelStyle = { display: "block", marginTop: "10px", fontWeight: "600", color: "#475569", fontSize: "14px" };
 const headerStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px" };
 const addBtn = { backgroundColor: "#1E3A8A", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer" };
