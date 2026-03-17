@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { setDoc, collection, query, where, onSnapshot, deleteDoc, doc, getDocs, updateDoc, addDoc } from "firebase/firestore";
+import { setDoc, collection, query, where, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
 import { db, app } from "../../firebase"; 
-import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
 
 const Students = () => {
@@ -38,7 +38,7 @@ const Students = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. جلب الأقسام
+  // 2. جلب الأقسام (ديناميكياً)
   useEffect(() => {
     const q = collection(db, "users");
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -58,7 +58,7 @@ const Students = () => {
     return () => unsubscribe();
   }, []);
 
-  // 4. جلب مواد الطالب المختارة (Enrollments)
+  // 4. جلب تسجيلات الطالب (Enrollments)
   useEffect(() => {
     if (selectedStudent && assignModal) {
       const q = query(collection(db, "enrollments"), where("studentId", "==", selectedStudent.id));
@@ -105,20 +105,48 @@ const Students = () => {
         });
         alert("Student updated successfully ✅");
       } else {
-        const secondaryApp = initializeApp(app.options, "Secondary");
+        const secondaryApp = initializeApp(app.options, "SecondaryAdd");
         const secondaryAuth = getAuth(secondaryApp);
-        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newStudent.email, newStudent.password);
-        const userUid = userCredential.user.uid;
+        
+        let userCredential;
+        let newUserUID;
+
+        try {
+          userCredential = await createUserWithEmailAndPassword(secondaryAuth, newStudent.email, newStudent.password);
+          newUserUID = userCredential.user.uid;
+        } catch (authError) {
+          if (authError.code === 'auth/email-already-in-use') {
+            try {
+              userCredential = await signInWithEmailAndPassword(secondaryAuth, newStudent.email, newStudent.password);
+              newUserUID = userCredential.user.uid;
+            } catch (signInError) {
+              await deleteApp(secondaryApp);
+              if (signInError.code === 'auth/wrong-password') {
+                alert("⚠️ هذا الإيميل مسجل مسبقاً بباسورد مختلف.");
+              } else {
+                alert("Auth Error: " + signInError.message);
+              }
+              return;
+            }
+          } else {
+            await deleteApp(secondaryApp);
+            throw authError;
+          }
+        }
+
         await signOut(secondaryAuth);
         await deleteApp(secondaryApp); 
 
-        await setDoc(doc(db, "users", userUid), {
+        await setDoc(doc(db, "users", newUserUID), {
           fullName: newStudent.fullName,
           email: newStudent.email,
           code: newStudent.code,
           department: newStudent.department.toUpperCase(), 
           academicYear: Number(newStudent.academicYear),
-          role: "student", status: "active", createdAt: new Date()
+          role: "student", 
+          status: "active", 
+          createdAt: new Date(),
+          uid: newUserUID
         });
         alert("Student created successfully! ✅");
       }
@@ -150,7 +178,6 @@ const Students = () => {
 
   return (
     <div style={{ padding: "30px" }}>
-      {/* Table & Filters - Original Kept */}
       <div style={headerStyle}>
         <div><h2 style={{ margin: 0 }}>Students</h2><p style={{ color: "#64748B", marginTop: "5px" }}>Manage university students</p></div>
         <button style={addBtn} onClick={() => { setEditingStudent(null); setNewStudent({ fullName: "", email: "", password: "", code: "", academicYear: 1, department: "" }); setShowModal(true); }}>+ Add Student</button>
@@ -192,7 +219,7 @@ const Students = () => {
         </table>
       </div>
 
-      {/* Assign Modal - NEWEST UPDATES HERE */}
+      {/* مودال الإسناد (Assign) */}
       {assignModal && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
@@ -200,69 +227,110 @@ const Students = () => {
               <h3 style={{ margin: 0 }}>Assign Subject</h3>
               <button onClick={() => setAssignModal(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>&times;</button>
             </div>
-            
-            <p style={{ fontSize: "14px", color: "#64748B", marginBottom: "15px" }}>
-              Student: <strong>{selectedStudent?.fullName || selectedStudent?.name}</strong>
-            </p>
-
+            <p style={{ fontSize: "14px", color: "#64748B", marginBottom: "15px" }}>Student: <strong>{selectedStudent?.fullName}</strong></p>
             <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#F8FAFC", borderRadius: "8px" }}>
-              <label style={{ ...labelStyle, marginTop: 0, marginBottom: "10px" }}>Currently Enrolled In:</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {studentEnrollments.length > 0 ? (
-                  studentEnrollments.map((env) => (
-                    <div key={env.enrollId} style={chipStyle}>{env.courseName}<span onClick={() => handleUnassign(env.enrollId)} style={removeIconStyle}>&times;</span></div>
-                  ))
-                ) : (<span style={{ fontSize: "13px", color: "#94A3B8" }}>No subjects assigned yet.</span>)}
+              <label style={labelStyle}>Currently Enrolled In:</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
+                {studentEnrollments.map((env) => (
+                  <div key={env.enrollId} style={chipStyle}>{env.courseName}<span onClick={() => handleUnassign(env.enrollId)} style={removeIconStyle}>&times;</span></div>
+                ))}
               </div>
             </div>
-
             <label style={labelStyle}>Add New Subject</label>
-            <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
-              <select 
-                style={{ ...modalInput, marginTop: 0 }} 
-                value={selectedSubject} 
-                onChange={(e) => setSelectedSubject(e.target.value)}
-              >
-                {/* 1. جعل الاختيار الافتراضي مخفي داخل القائمة */}
+            <div style={{ display: "flex", gap: "10px" }}>
+              <select style={modalInput} value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
                 <option value="" hidden>Select Subject</option>
-                
-                {/* 2. الفلترة + الترتيب الأبجدي */}
+                {/* التعديل: ترتيب المواد أبجدياً قبل العرض */}
                 {subjects
                   .filter(sub => !studentEnrollments.some(env => env.courseId === sub.id))
-                  .sort((a, b) => a.name.localeCompare(b.name, ["ar", "en"])) // الترتيب الأبجدي
+                  .sort((a, b) => (a.name || "").localeCompare(b.name || "", ["ar", "en"]))
                   .map((sub) => (
                     <option key={sub.id} value={sub.id}>{sub.name}</option>
-                  ))
-                }
+                  ))}
               </select>
-              <button style={{ ...saveBtn, whiteSpace: "nowrap" }} onClick={handleAssignConfirm}>Assign</button>
+              <button style={saveBtn} onClick={handleAssignConfirm}>Assign</button>
             </div>
-            
-            <button style={{ ...cancelBtn, width: "100%", marginTop: "20px", marginRight: 0 }} onClick={() => setAssignModal(false)}>Close</button>
+            <button style={{ ...cancelBtn, width: "100%", marginTop: "15px" }} onClick={() => setAssignModal(false)}>Close</button>
           </div>
         </div>
       )}
 
-      {/* Rest of Modals (Add/Edit & Delete) - Kept Original */}
+      {/* مودال الإضافة والتعديل (Add/Edit) */}
       {showModal && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
-            <h3>{editingStudent ? "Edit Student Info" : "Add New Student"}</h3>
+            <h3 style={{ marginBottom: "20px", color: "#1E3A8A" }}>
+              {editingStudent ? "Edit Student Details" : "Register New Student"}
+            </h3>
+            
             <label style={labelStyle}>Full Name</label>
-            <input style={modalInput} value={newStudent.fullName} onChange={(e) => setNewStudent({ ...newStudent, fullName: e.target.value })} />
+            <input 
+              style={modalInput} 
+              placeholder="e.g. Ahmed Ali"
+              value={newStudent.fullName} 
+              onChange={(e) => setNewStudent({ ...newStudent, fullName: e.target.value })} 
+            />
+            
             {!editingStudent && (
               <>
-                <label style={labelStyle}>Email</label>
-                <input style={modalInput} value={newStudent.email} onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })} />
+                <label style={labelStyle}>Email Address</label>
+                <input 
+                  style={modalInput} 
+                  type="email"
+                  placeholder="---@std.sci.cu.edu.eg"
+                  autoComplete="off"
+                  value={newStudent.email} 
+                  onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })} 
+                />
                 <label style={labelStyle}>Password</label>
-                <input type="password" style={modalInput} value={newStudent.password} onChange={(e) => setNewStudent({ ...newStudent, password: e.target.value })} />
+                <input 
+                  type="password" 
+                  style={modalInput} 
+                  placeholder="At least 6 characters"
+                  autoComplete="new-password"
+                  value={newStudent.password} 
+                  onChange={(e) => setNewStudent({ ...newStudent, password: e.target.value })} 
+                />
               </>
             )}
-            <label style={labelStyle}>Code</label>
-            <input style={modalInput} value={newStudent.code} onChange={(e) => setNewStudent({ ...newStudent, code: e.target.value })} />
-            <div style={{ textAlign: "right", marginTop: "20px" }}>
-              <button style={cancelBtn} onClick={() => { setShowModal(false); setEditingStudent(null); }}>Cancel</button>
-              <button style={saveBtn} onClick={handleAddStudent}>{editingStudent ? "Update" : "Create"}</button>
+
+            <label style={labelStyle}>Student Code</label>
+            <input 
+              style={modalInput} 
+              placeholder="e.g. 1141141"
+              value={newStudent.code} 
+              onChange={(e) => setNewStudent({ ...newStudent, code: e.target.value })} 
+            />
+
+            <label style={labelStyle}>Academic Level</label>
+            <select 
+              style={modalInput} 
+              value={newStudent.academicYear} 
+              onChange={(e) => setNewStudent({ ...newStudent, academicYear: e.target.value })}
+            >
+              <option value="1">Level 1</option>
+              <option value="2">Level 2</option>
+              <option value="3">Level 3</option>
+              <option value="4">Level 4</option>
+            </select>
+
+            <label style={labelStyle}>Department</label>
+            <input 
+              list="dept-list" 
+              style={modalInput} 
+              placeholder="Type or select (e.g. CS)" 
+              value={newStudent.department} 
+              onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })} 
+            />
+            <datalist id="dept-list">
+              {departments.map((dept, index) => <option key={index} value={dept} />)}
+            </datalist>
+
+            <div style={{ textAlign: "right", marginTop: "30px" }}>
+              <button style={cancelBtn} onClick={() => setShowModal(false)}>Cancel</button>
+              <button style={saveBtn} onClick={handleAddStudent}>
+                {editingStudent ? "Update" : "Create Account"}
+              </button>
             </div>
           </div>
         </div>
@@ -272,7 +340,7 @@ const Students = () => {
         <div style={overlayStyle}>
           <div style={modalStyle}>
             <h3>Confirm Delete</h3>
-            <p>Delete <strong>{confirmDelete.fullName || confirmDelete.name}</strong>?</p>
+            <p>Delete <strong>{confirmDelete.fullName}</strong>?</p>
             <div style={{ textAlign: "right", marginTop: "20px" }}>
               <button style={cancelBtn} onClick={() => setConfirmDelete(null)}>Cancel</button>
               <button style={deleteBtn} onClick={async () => { await deleteDoc(doc(db, "users", confirmDelete.id)); setConfirmDelete(null); }}>Yes, Delete</button>
@@ -284,30 +352,30 @@ const Students = () => {
   );
 };
 
-// Styles
-const chipStyle = { display: "flex", alignItems: "center", backgroundColor: "#E0F2FE", color: "#0369A1", padding: "4px 10px", borderRadius: "6px", fontSize: "13px", fontWeight: "500", border: "1px solid #BAE6FD" };
-const removeIconStyle = { marginLeft: "8px", cursor: "pointer", color: "#EF4444", fontWeight: "bold", fontSize: "16px" };
+// Styles 
 const labelStyle = { display: "block", marginTop: "10px", fontWeight: "600", color: "#475569", fontSize: "14px" };
+const chipStyle = { display: "flex", alignItems: "center", backgroundColor: "#E0F2FE", color: "#0369A1", padding: "4px 10px", borderRadius: "6px", fontSize: "13px" };
+const removeIconStyle = { marginLeft: "8px", cursor: "pointer", color: "#EF4444" };
 const headerStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px" };
 const addBtn = { backgroundColor: "#1E3A8A", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer" };
 const statsContainer = { display: "flex", gap: "20px", marginBottom: "30px" };
-const statCard = { flex: 1, backgroundColor: "white", padding: "25px", borderRadius: "12px", boxShadow: "0 10px 25px rgba(0,0,0,0.08)", textAlign: "center" };
-const statNumber = { margin: 0, fontSize: "28px", color: "#1E3A8A" };
-const statLabel = { marginTop: "8px", color: "#64748B", fontSize: "14px" };
+const statCard = { flex: 1, backgroundColor: "white", padding: "20px", borderRadius: "12px", boxShadow: "0 4px 6px rgba(0,0,0,0.05)", textAlign: "center" };
+const statNumber = { margin: 0, fontSize: "24px", color: "#1E3A8A" };
+const statLabel = { color: "#64748B", fontSize: "14px" };
 const filterContainer = { display: "flex", gap: "15px", marginBottom: "20px" };
-const inputStyle = { padding: "10px", borderRadius: "8px", border: "1px solid #CBD5E1", width: "200px" };
-const cardStyle = { backgroundColor: "#ffffff", borderRadius: "12px", boxShadow: "0 10px 25px rgba(0,0,0,0.08)", overflow: "hidden" };
+const inputStyle = { padding: "10px", borderRadius: "8px", border: "1px solid #CBD5E1" };
+const cardStyle = { backgroundColor: "#ffffff", borderRadius: "12px", boxShadow: "0 4px 6px rgba(0,0,0,0.05)", overflow: "hidden" };
 const tableStyle = { width: "100%", borderCollapse: "collapse" };
-const thStyle = { padding: "15px", backgroundColor: "#F1F5F9", color: "#1E3A8A", textAlign: "left" };
-const tdStyle = { padding: "15px", borderTop: "1px solid #E2E8F0", textAlign: "left", maxWidth: "180px" };
-const badgeStyle = { backgroundColor: "#E0F2FE", color: "#0EA5E9", padding: "5px 12px", borderRadius: "20px" };
-const editBtn = { backgroundColor: "#3B82F6", color: "white", border: "none", padding: "6px 12px", borderRadius: "8px", marginRight: "8px", cursor: "pointer" };
-const deleteBtn = { backgroundColor: "#DC2626", color: "white", border: "none", padding: "6px 12px", borderRadius: "8px", cursor: "pointer" };
-const assignBtnStyle = { backgroundColor: "#10B981", color: "white", border: "none", padding: "6px 12px", borderRadius: "8px", marginLeft: "8px", cursor: "pointer" };
+const thStyle = { padding: "15px", backgroundColor: "#F8FAFC", textAlign: "left" };
+const tdStyle = { padding: "15px", borderTop: "1px solid #E2E8F0" };
+const badgeStyle = { backgroundColor: "#E0F2FE", color: "#0EA5E9", padding: "4px 10px", borderRadius: "20px", fontSize: "12px" };
+const editBtn = { backgroundColor: "#3B82F6", color: "white", border: "none", padding: "6px 12px", borderRadius: "6px", marginRight: "5px", cursor: "pointer" };
+const deleteBtn = { backgroundColor: "#EF4444", color: "white", border: "none", padding: "6px 12px", borderRadius: "6px", cursor: "pointer" };
+const assignBtnStyle = { backgroundColor: "#10B981", color: "white", border: "none", padding: "6px 12px", borderRadius: "6px", marginLeft: "5px", cursor: "pointer" };
 const overlayStyle = { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-const modalStyle = { backgroundColor: "white", padding: "30px", borderRadius: "12px", width: "420px", maxHeight: "90vh", overflowY: "auto" };
+const modalStyle = { backgroundColor: "white", padding: "25px", borderRadius: "12px", width: "400px" };
 const modalInput = { width: "100%", padding: "10px", marginTop: "5px", borderRadius: "8px", border: "1px solid #CBD5E1", boxSizing: "border-box" };
-const cancelBtn = { backgroundColor: "#94A3B8", color: "white", border: "none", padding: "8px 15px", borderRadius: "8px", marginRight: "10px", cursor: "pointer" };
-const saveBtn = { backgroundColor: "#1E3A8A", color: "white", border: "none", padding: "8px 15px", borderRadius: "8px", cursor: "pointer" };
+const cancelBtn = { backgroundColor: "#94A3B8", color: "white", border: "none", padding: "8px 16px", borderRadius: "8px", marginRight: "10px", cursor: "pointer" };
+const saveBtn = { backgroundColor: "#1E3A8A", color: "white", border: "none", padding: "8px 16px", borderRadius: "8px", cursor: "pointer" };
 
 export default Students;
