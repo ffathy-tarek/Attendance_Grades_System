@@ -1,8 +1,9 @@
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
-import { auth } from '../firebaseConfig'; 
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
+import { auth, db } from '../firebaseConfig'; 
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore"; 
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -10,18 +11,43 @@ export default function LoginScreen() {
   const [pass, setPass] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    if (!emailInput || !pass) return Alert.alert("Missing Data", "Please enter Email and Password");
+  const handleLogin = async () => {
+    if (!emailInput || !pass) {
+        const msg = "Please enter Email and Password";
+        return Platform.OS === 'web' ? alert(msg) : Alert.alert("Missing Data", msg);
+    }
+    
     setLoading(true);
-    signInWithEmailAndPassword(auth, emailInput.trim(), pass)
-      .then(() => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, emailInput.trim(), pass);
+      const user = userCredential.user;
+
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const role = userData.role; 
+
         setLoading(false);
-        router.replace('/dashboard' as any); 
-      })
-      .catch(() => {
+        if (role === "student") {
+           router.replace('/student-dashboard' as any); 
+        } else if (role === "instructor") {
+           router.replace('/instructor-dashboard' as any); 
+        } else {
+           const adminMsg = "Access denied. Admins use the Web Dashboard.";
+           Platform.OS === 'web' ? alert(adminMsg) : Alert.alert("Forbidden", adminMsg);
+        }
+      } else {
         setLoading(false);
-        Alert.alert("Login Failed", "The email or password you entered is incorrect.");
-      });
+        const noUserMsg = "User record not found in database.";
+        Platform.OS === 'web' ? alert(noUserMsg) : Alert.alert("Error", noUserMsg);
+      }
+
+    } catch (error) {
+      setLoading(false);
+      const failMsg = "The email or password you entered is incorrect.";
+      Platform.OS === 'web' ? alert(failMsg) : Alert.alert("Login Failed", failMsg);
+    }
   };
 
   return (
