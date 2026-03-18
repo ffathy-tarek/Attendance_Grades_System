@@ -27,7 +27,6 @@ export default function AddRequest() {
         return;
       }
 
-      // --- التعديل الجديد: فحص دومين الإيميل بناءً على الرتبة ---
       const emailLower = email.trim().toLowerCase();
       const studentDomain = "@std.sci.cu.edu.eg";
       const instructorDomain = "@sci.cu.edu.eg";
@@ -39,7 +38,6 @@ export default function AddRequest() {
               return;
           }
       } else if (role === 'instructor') {
-          // هنا بنتأكد إنه ينتهي بالدومين الصح وفي نفس الوقت ميكونش فيه "std"
           if (!emailLower.endsWith(instructorDomain) || emailLower.includes("@std.")) {
               const msg = `Instructors must use an email ending with ${instructorDomain} (without 'std')`;
               if (Platform.OS === 'web') { alert(msg); } else { Alert.alert("Email Error", msg); }

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { collection, onSnapshot, doc, updateDoc, setDoc, query, where, deleteDoc } from "firebase/firestore";
 import { db, app } from "../../firebase"; 
-import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
 
 function PendingAccounts() {
   const [pendingAccounts, setPendingAccounts] = useState([]);
-  const [existingDepartments, setExistingDepartments] = useState([]); // State لحفظ الأقسام الموجودة
+  const [existingDepartments, setExistingDepartments] = useState([]); 
 
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -17,7 +17,6 @@ function PendingAccounts() {
   });
 
   useEffect(() => {
-    // 1. جلب طلبات الحسابات المعلقة
     const q = query(collection(db, "emailRequests"), where("status", "==", "pending"));
     const unsubRequests = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -25,10 +24,8 @@ function PendingAccounts() {
       setPendingAccounts(sortedData);
     });
 
-    // 2. جلب الأقسام الفريدة من جدول المستخدمين (ديناميكياً)
     const unsubDepts = onSnapshot(collection(db, "users"), (snapshot) => {
       const depts = snapshot.docs.map(doc => doc.data().department);
-      // استخدام Set لإزالة التكرار و filter لإزالة القيم الفارغة
       const uniqueDepts = [...new Set(depts)].filter(d => d);
       setExistingDepartments(uniqueDepts);
     });
@@ -64,32 +61,52 @@ function PendingAccounts() {
       const secondaryAuth = getAuth(secondaryApp);
       
       let userCredential;
+      let newUserUID;
+
       try {
+        // المحاولة الأولى: إنشاء مستخدم جديد
         userCredential = await createUserWithEmailAndPassword(secondaryAuth, selectedAccount.email, studentDetails.password);
-        await signOut(secondaryAuth);
-        await deleteApp(secondaryApp);
+        newUserUID = userCredential.user.uid;
       } catch (authError) {
-        await deleteApp(secondaryApp);
+        // إذا كان الإيميل موجود مسبقاً في الـ Auth
         if (authError.code === 'auth/email-already-in-use') {
-            alert("This email is already registered!");
+          try {
+            // المحاولة الثانية: تسجيل دخول بالباسورد المكتوب لجلب الـ UID
+            userCredential = await signInWithEmailAndPassword(secondaryAuth, selectedAccount.email, studentDetails.password);
+            newUserUID = userCredential.user.uid;
+            console.log("Email exists. Re-linked via Sign-in.");
+          } catch (signInError) {
+            await deleteApp(secondaryApp);
+            if (signInError.code === 'auth/wrong-password') {
+              alert("⚠️ الإيميل مسجل مسبقاً، والباسورد الذي أدخلته غير مطابق للباسورد القديم لهذا الإيميل. يرجى كتابة الباسورد الصحيح لإعادة التفعيل.");
+            } else {
+              alert("Auth Error: " + signInError.message);
+            }
             return;
+          }
+        } else {
+          await deleteApp(secondaryApp);
+          throw authError;
         }
-        throw authError;
       }
 
-      const newUserUID = userCredential.user.uid;
+      // تسجيل خروج وحذف التطبيق الثانوي بعد النجاح في الحصول على UID
+      await signOut(secondaryAuth);
+      await deleteApp(secondaryApp);
 
+      // تحديث حالة الطلب
       await updateDoc(doc(db, "emailRequests", selectedAccount.id), {
         status: "approved"
       });
 
+      // إعداد بيانات المستخدم للـ Firestore
       const userData = {
         fullName: selectedAccount.name || selectedAccount.fullName,
         email: selectedAccount.email,
         role: selectedAccount.role, 
         status: "active",
         createdAt: new Date(),
-        department: studentDetails.department.toUpperCase(), // توحيد الحروف لتكون Capital
+        department: studentDetails.department.toUpperCase(),
         uid: newUserUID
       };
 
@@ -98,9 +115,10 @@ function PendingAccounts() {
         userData.academicYear = Number(studentDetails.academicYear);
       }
 
+      // حفظ/تحديث البيانات في Firestore (باستخدام setDoc لضمان الكتابة فوق أي بيانات قديمة)
       await setDoc(doc(db, "users", newUserUID), userData);
 
-      alert(`Success! ${selectedAccount.role} created successfully. ✅`);
+      alert(`Success! ${selectedAccount.role} active now. ✅`);
       setShowApproveModal(false);
       setSelectedAccount(null);
     } catch (error) {
@@ -201,10 +219,9 @@ function PendingAccounts() {
               </>
             )}
 
-            {/* الحقل الديناميكي للقسم */}
             <label style={labelStyle}>Department</label>
             <input
-              list="dept-list" // ربط الحقل بالقائمة بالأسفل
+              list="dept-list"
               style={modalInput}
               placeholder="Type or select department"
               value={studentDetails.department}

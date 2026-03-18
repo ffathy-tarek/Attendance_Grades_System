@@ -8,7 +8,7 @@ import {
   updateDoc,
   query,
   where,
-  orderBy, // تم إضافة orderBy هنا
+  orderBy,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate } from "react-router-dom";
@@ -21,7 +21,7 @@ const Subjects = () => {
   const [selectedInstructors, setSelectedInstructors] = useState([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [instructorSearch, setInstructorSearch] = useState("");
-  const [enrollCounts, setEnrollCounts] = useState({});
+  const [enrollments, setEnrollments] = useState([]);
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
 
@@ -31,7 +31,8 @@ const Subjects = () => {
   const [showAssignInsModal, setShowAssignInsModal] = useState(false);
 
   const [currentSubjectId, setCurrentSubjectId] = useState(null);
-  const [currentInstructors, setCurrentInstructors] = useState([]);
+  const [currentSubjectName, setCurrentSubjectName] = useState("");
+  const [viewingInstructorsList, setViewingInstructorsList] = useState([]);
   const [editingSubject, setEditingSubject] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -62,23 +63,16 @@ const Subjects = () => {
     }
   };
 
-  // --- الدالة المحدثة للترتيب الأبجدي ---
   const loadSubjects = async () => {
     try {
-      // تعديل الاستعلام ليقوم بالترتيب حسب الاسم تصاعدياً (أبجدياً)
       const q = query(collection(db, "courses"), orderBy("name", "asc"));
       const snapshot = await getDocs(q);
-
       const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setSubjects(list);
 
       const enrollSnap = await getDocs(collection(db, "enrollments"));
-      const counts = {};
-      enrollSnap.docs.forEach((d) => {
-        const data = d.data();
-        counts[data.courseId] = (counts[data.courseId] || 0) + 1;
-      });
-      setEnrollCounts(counts);
+      const enrollList = enrollSnap.docs.map((d) => d.data());
+      setEnrollments(enrollList);
     } catch (e) {
       console.error("Error loading subjects:", e);
     }
@@ -101,9 +95,8 @@ const Subjects = () => {
     try {
       const subjectRef = doc(db, "courses", currentSubjectId);
       await updateDoc(subjectRef, { instructorIds: selectedInstructors });
-      alert("Instructor list updated successfully!");
       setShowAssignInsModal(false);
-      loadSubjects();
+      await loadSubjects();
     } catch (e) {
       alert("Error updating instructors");
     } finally {
@@ -139,10 +132,8 @@ const Subjects = () => {
           });
         }
       }
-
-      alert("Student enrollments updated successfully!");
       setShowEnrollModal(false);
-      loadSubjects();
+      await loadSubjects();
     } catch (e) {
       alert("Error updating students");
     } finally {
@@ -164,9 +155,17 @@ const Subjects = () => {
     setShowEnrollModal(true);
   };
 
+  const handleViewInstructors = (subject) => {
+    setCurrentSubjectName(subject.name);
+    const assigned = instructors.filter((ins) =>
+      subject.instructorIds?.includes(ins.id),
+    );
+    setViewingInstructorsList(assigned);
+    setShowInstructorModal(true);
+  };
+
   const deleteSubject = async (id, subjectName) => {
-    if (!window.confirm(`Confirm deleting ${subjectName || "this subject"}?`))
-      return;
+    if (!window.confirm(`Confirm deleting ${subjectName}?`)) return;
     try {
       await deleteDoc(doc(db, "courses", id));
       const enrollSnap = await getDocs(
@@ -175,9 +174,9 @@ const Subjects = () => {
       for (const e of enrollSnap.docs) {
         await deleteDoc(doc(db, "enrollments", e.id));
       }
-      alert("Subject deleted successfully!");
-    } finally {
       loadSubjects();
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -188,17 +187,14 @@ const Subjects = () => {
     try {
       if (editingSubject) {
         await updateDoc(doc(db, "courses", editingSubject.id), newSubject);
-        alert("Subject updated successfully!");
       } else {
         await addDoc(collection(db, "courses"), newSubject);
-        alert("Subject added successfully!");
       }
       setShowModal(false);
       loadSubjects();
-    } catch (e) {
-      alert("Error saving");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (
@@ -256,85 +252,119 @@ const Subjects = () => {
                   (levelFilter === "all" ||
                     (sub.level || "").toString() === levelFilter),
               )
-              .map((subject) => (
-                <tr key={subject.id}>
-                  <td style={tdStyle}>
-                    <strong>{subject.name}</strong>{" "}
-                    <span style={studentCountBadge}>
-                      👥 {enrollCounts[subject.id] || 0}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>{subject.code}</td>
-                  <td style={tdStyle}>
-                    <button
-                      style={assignInsBtn}
-                      onClick={() => {
-                        setCurrentSubjectId(subject.id);
-                        setSelectedInstructors(subject.instructorIds || []);
-                        setShowAssignInsModal(true);
-                      }}
-                    >
-                      Manage Instructors
-                    </button>
-                    <button
-                      style={instructorBtn}
-                      onClick={() => {
-                        setCurrentInstructors(
-                          instructors.filter((i) =>
-                            subject.instructorIds?.includes(i.id),
-                          ),
-                        );
-                        setShowInstructorModal(true);
-                      }}
-                    >
-                      View Instructors
-                    </button>
-                    <button
-                      style={viewBtn}
-                      onClick={() => openEnrollModal(subject.id)}
-                    >
-                      Manage Students
-                    </button>
-                    <button
-                      style={instructorBtn}
-                      onClick={() =>
-                        navigate(`/admin/subject-students/${subject.id}`)
-                      }
-                    >
-                      View Students
-                    </button>
-                    <button
-                      style={editBtn}
-                      onClick={() => {
-                        setEditingSubject(subject);
-                        setNewSubject(subject);
-                        setShowModal(true);
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      style={deleteBtn}
-                      onClick={() => deleteSubject(subject.id, subject.name)}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              .map((subject) => {
+                // Calculate actual counts based on current data
+                const actualInstructorCount = instructors.filter((ins) =>
+                  subject.instructorIds?.includes(ins.id),
+                ).length;
+                const actualStudentCount = enrollments.filter(
+                  (enroll) =>
+                    enroll.courseId === subject.id &&
+                    students.some((s) => s.id === enroll.studentId),
+                ).length;
+
+                return (
+                  <tr key={subject.id}>
+                    <td style={tdStyle}>
+                      <strong>{subject.name}</strong>
+                      <span style={studentCountBadge} title="Students">
+                        👥 {actualStudentCount}
+                      </span>
+                      <span style={instructorCountBadge} title="Instructors">
+                        👨‍🏫 {actualInstructorCount}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>{subject.code}</td>
+                    <td style={tdStyle}>
+                      <button
+                        style={assignInsBtn}
+                        onClick={() => {
+                          setCurrentSubjectId(subject.id);
+                          setSelectedInstructors(subject.instructorIds || []);
+                          setShowAssignInsModal(true);
+                        }}
+                      >
+                        Manage Instructors
+                      </button>
+                      <button
+                        style={instructorBtn}
+                        onClick={() => handleViewInstructors(subject)}
+                      >
+                        View Instructors
+                      </button>
+                      <button
+                        style={viewBtn}
+                        onClick={() => openEnrollModal(subject.id)}
+                      >
+                        Manage Students
+                      </button>
+                      <button
+                        style={instructorBtn}
+                        onClick={() =>
+                          navigate(`/admin/subject-students/${subject.id}`)
+                        }
+                      >
+                        View Students
+                      </button>
+                      <button
+                        style={editBtn}
+                        onClick={() => {
+                          setEditingSubject(subject);
+                          setNewSubject(subject);
+                          setShowModal(true);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        style={deleteBtn}
+                        onClick={() => deleteSubject(subject.id, subject.name)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>
 
-      {/* 1. Assign Instructor Modal */}
+      {/* Modals Section */}
+      {showInstructorModal && (
+        <div style={overlayStyle}>
+          <div style={{ ...modalStyle, minWidth: "350px" }}>
+            <h3>{currentSubjectName} - Instructors</h3>
+            <div style={{ margin: "20px 0" }}>
+              {viewingInstructorsList.length > 0 ? (
+                viewingInstructorsList.map((i) => (
+                  <div key={i.id} style={instructorRow}>
+                    👤 {i.fullName}
+                  </div>
+                ))
+              ) : (
+                <p style={{ textAlign: "center", color: "#666" }}>
+                  No instructors assigned.
+                </p>
+              )}
+            </div>
+            <button
+              style={{ ...cancelBtn, width: "100%" }}
+              onClick={() => setShowInstructorModal(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {showAssignInsModal && (
         <div style={overlayStyle}>
-          <div style={{ ...modalStyle, width: "550px" }}>
+          <div style={{ ...modalStyle, width: "500px" }}>
             <h3>Manage Instructors</h3>
             <input
               style={modalInput}
               placeholder="Search instructors..."
-              value={instructorSearch}
               onChange={(e) => setInstructorSearch(e.target.value)}
             />
             <div style={listContainerStyle}>
@@ -376,20 +406,16 @@ const Subjects = () => {
         </div>
       )}
 
-      {/* 2. Enroll Students Modal */}
       {showEnrollModal && (
         <div style={overlayStyle}>
           <div style={{ ...modalStyle, width: "600px" }}>
             <h3>Manage Student Enrollments</h3>
-
             <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
               <input
                 style={{ ...modalInput, marginTop: 0, flex: 1 }}
                 placeholder="Search students..."
-                value={studentSearch}
                 onChange={(e) => setStudentSearch(e.target.value)}
               />
-
               <button
                 type="button"
                 onClick={() => {
@@ -400,16 +426,7 @@ const Subjects = () => {
                   );
                   toggleSelectAllStudents(filtered);
                 }}
-                style={{
-                  padding: "0 15px",
-                  borderRadius: "8px",
-                  border: "1px solid #1E3A8A",
-                  background: "transparent",
-                  color: "#1E3A8A",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  fontWeight: "bold",
-                }}
+                style={selectAllBtnStyle}
               >
                 {students
                   .filter((s) =>
@@ -422,7 +439,6 @@ const Subjects = () => {
                   : "Select All"}
               </button>
             </div>
-
             <div style={listContainerStyle}>
               {students
                 .filter((s) =>
@@ -462,33 +478,6 @@ const Subjects = () => {
         </div>
       )}
 
-      {/* 3. View Instructors Modal */}
-      {showInstructorModal && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <h3>Instructor Details</h3>
-            <div style={{ margin: "20px 0" }}>
-              {currentInstructors.length > 0 ? (
-                currentInstructors.map((i) => (
-                  <div key={i.id} style={instructorRow}>
-                    👤 {i.fullName}
-                  </div>
-                ))
-              ) : (
-                <p>No instructors assigned.</p>
-              )}
-            </div>
-            <button
-              style={cancelBtn}
-              onClick={() => setShowInstructorModal(false)}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Add/Edit Subject Modal */}
       {showModal && (
         <div style={overlayStyle}>
           <div style={modalStyle}>
@@ -532,7 +521,7 @@ const Subjects = () => {
   );
 };
 
-// --- Styles الموحدة والاحترافية ---
+// Styles
 const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
@@ -546,8 +535,6 @@ const addBtn = {
   borderRadius: "8px",
   border: "none",
   cursor: "pointer",
-  fontSize: "14px",
-  fontWeight: "500",
 };
 const inputStyle = {
   padding: "10px",
@@ -578,7 +565,7 @@ const assignInsBtn = {
   border: "none",
   padding: "6px 10px",
   borderRadius: "6px",
-  marginLeft: "5px",
+  marginRight: "5px",
   cursor: "pointer",
   fontSize: "12px",
 };
@@ -588,7 +575,7 @@ const instructorBtn = {
   border: "none",
   padding: "6px 10px",
   borderRadius: "6px",
-  marginLeft: "5px",
+  marginRight: "5px",
   cursor: "pointer",
   fontSize: "12px",
 };
@@ -598,7 +585,7 @@ const viewBtn = {
   border: "none",
   padding: "6px 10px",
   borderRadius: "6px",
-  marginLeft: "5px",
+  marginRight: "5px",
   cursor: "pointer",
   fontSize: "12px",
 };
@@ -608,7 +595,7 @@ const editBtn = {
   border: "none",
   padding: "6px 10px",
   borderRadius: "6px",
-  marginLeft: "5px",
+  marginRight: "5px",
   cursor: "pointer",
   fontSize: "12px",
 };
@@ -618,17 +605,8 @@ const deleteBtn = {
   border: "none",
   padding: "6px 10px",
   borderRadius: "6px",
-  marginLeft: "5px",
   cursor: "pointer",
   fontSize: "12px",
-};
-const badgeStyle = {
-  backgroundColor: "#E0F2FE",
-  color: "#0EA5E9",
-  padding: "4px 10px",
-  borderRadius: "15px",
-  fontSize: "12px",
-  fontWeight: "bold",
 };
 const studentCountBadge = {
   backgroundColor: "#F1F5F9",
@@ -637,7 +615,22 @@ const studentCountBadge = {
   borderRadius: "12px",
   fontSize: "11px",
   fontWeight: "bold",
+  marginLeft: "10px",
+  display: "inline-flex",
+  alignItems: "center",
+  border: "1px solid #E2E8F0",
+};
+const instructorCountBadge = {
+  backgroundColor: "#FEF3C7",
+  color: "#D97706",
+  padding: "2px 8px",
+  borderRadius: "12px",
+  fontSize: "11px",
+  fontWeight: "bold",
   marginLeft: "5px",
+  display: "inline-flex",
+  alignItems: "center",
+  border: "1px solid #FCD34D",
 };
 const overlayStyle = {
   position: "fixed",
@@ -655,7 +648,7 @@ const modalStyle = {
   background: "white",
   padding: "25px",
   borderRadius: "12px",
-  boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+  width: "450px",
 };
 const modalInput = {
   width: "100%",
@@ -688,7 +681,6 @@ const saveBtn = {
   borderRadius: "8px",
   cursor: "pointer",
   marginRight: "10px",
-  fontWeight: "500",
 };
 const cancelBtn = {
   background: "#94A3B8",
@@ -697,7 +689,6 @@ const cancelBtn = {
   padding: "8px 20px",
   borderRadius: "8px",
   cursor: "pointer",
-  fontWeight: "500",
 };
 const instructorRow = {
   padding: "10px",
@@ -706,6 +697,16 @@ const instructorRow = {
   marginBottom: "8px",
   borderLeft: "4px solid #F59E0B",
   fontWeight: "500",
+};
+const selectAllBtnStyle = {
+  padding: "0 15px",
+  borderRadius: "8px",
+  border: "1px solid #1E3A8A",
+  background: "transparent",
+  color: "#1E3A8A",
+  cursor: "pointer",
+  fontSize: "12px",
+  fontWeight: "bold",
 };
 
 export default Subjects;

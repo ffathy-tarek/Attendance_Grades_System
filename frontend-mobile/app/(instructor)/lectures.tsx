@@ -7,7 +7,6 @@ import { useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 
-// تعريف الـ Type عشان TypeScript ميزعلش
 interface LectureSession {
   id: string;
   courseId: string;
@@ -30,7 +29,6 @@ export default function LecturesScreen() {
   const [isQRVisible, setIsQRVisible] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState("1 hour");
 
-  // للتحكم في تفاصيل الطلاب اللي حضروا
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [attendedStudents, setAttendedStudents] = useState<any[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -107,7 +105,7 @@ export default function LecturesScreen() {
         instructorId: auth.currentUser?.uid,
         startTime: serverTimestamp(),
         status: "active",
-        durationMinutes: selectedDuration, // الاسم الموحد للويب
+        durationMinutes: selectedDuration, 
         instructorLocation: new GeoPoint(loc.coords.latitude, loc.coords.longitude) // GeoPoint
       });
       setShowCoursePicker(false);
@@ -131,7 +129,6 @@ export default function LecturesScreen() {
         <TouchableOpacity style={styles.newBtn} onPress={() => setShowCoursePicker(true)}><Text style={styles.newBtnTxt}>+ New</Text></TouchableOpacity>
       </View>
 
-      {/* شريط الجلسة المفتوحة حالياً */}
       {activeSession && (
         <TouchableOpacity style={styles.liveBar} onPress={() => setIsQRVisible(true)}>
           <Ionicons name="radio-button-on" size={18} color="#fff" />
@@ -156,7 +153,6 @@ export default function LecturesScreen() {
           );
       }} />
 
-      {/* Modal اختيار المحاضرة والمدة */}
       <Modal visible={showCoursePicker} animationType="slide" transparent>
         <View style={styles.modalOverlay}><View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Lecture Setup</Text>
@@ -174,7 +170,6 @@ export default function LecturesScreen() {
         </View></View>
       </Modal>
 
-      {/* Modal تفاصيل الحضور (مين اللي حضر السيشن) */}
       <Modal visible={detailsModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}><View style={styles.detailsContent}>
           <View style={styles.detailsHeader}>
@@ -189,7 +184,6 @@ export default function LecturesScreen() {
         </View></View>
       </Modal>
 
-      {/* Modal الكيو ار المطور (إغلاق، حضور يدوي، GPS) */}
       {activeSession && (
         <Modal visible={isQRVisible} animationType="fade">
           <View style={styles.qrContainer}>

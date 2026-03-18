@@ -1,25 +1,66 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
 import { getAttendanceData, getTotalStats } from './coursesData';
+import { useAuth } from '../../context/AuthContext';
 
 const AttendancePage = () => {
-  const [filter, setFilter] = useState('all'); 
-  
-  const attendance = getAttendanceData();
-  const stats = getTotalStats();
+  const { user } = useAuth();
+  const [filter, setFilter] = useState('all');
+  const [attendance, setAttendance] = useState([]);
+  const [stats, setStats] = useState({
+    averageAttendance: 0,
+    perfectAttendance: 0,
+    needingAttention: 0,
+    totalCourses: 0,
+    totalLectures: 0,
+    totalPresent: 0,
+    totalAbsences: 0
+  });
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const loadAttendanceData = async () => {
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const [attendanceData, statsData] = await Promise.all([
+          getAttendanceData(user.uid),
+          getTotalStats(user.uid)
+        ]);
+
+        setAttendance(attendanceData || []);
+        setStats(statsData || {
+          averageAttendance: 0,
+          perfectAttendance: 0,
+          needingAttention: 0,
+          totalCourses: 0,
+          totalLectures: 0,
+          totalPresent: 0,
+          totalAbsences: 0
+        });
+      } catch (error) {
+        console.error('Error loading attendance:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAttendanceData();
+  }, [user?.uid]);
 
   const filteredAttendance = attendance.filter(a => {
     if (filter === 'all') return true;
-    if (filter === 'excellent') return a.status === 'Perfect' || a.status === 'Good';
-    if (filter === 'needs-improvement') return a.status === 'Needs Improvement';
+    if (filter === 'excellent') return a.status === 'Perfect' || a.status === 'Regular';
+    if (filter === 'needs-improvement') return a.status === 'انذار اول' || a.status === 'انذار ثاني' || a.status === 'حرمان';
     return true;
   });
 
   const handleExport = () => {
-  
     const exportData = attendance.map(a => ({
       Subject: a.subject,
       Present: a.present,
@@ -69,13 +110,22 @@ const AttendancePage = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <PageLayout title="Attendance" subtitle="Track your attendance records">
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+        </div>
+      </PageLayout>
+    );
+  }
+
   return (
     <PageLayout 
       title="Attendance" 
       subtitle="Track your attendance records"
       actions={
         <div style={{ display: 'flex', gap: '12px' }}>
-         
           <button 
             onClick={handleExport}
             style={{
@@ -105,7 +155,6 @@ const AttendancePage = () => {
         </div>
       }
     >
-    
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
@@ -189,7 +238,7 @@ const AttendancePage = () => {
             ) : (
               <tr>
                 <td colSpan="6" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
-                  No courses match the selected filter
+                  No attendance records found
                 </td>
               </tr>
             )}
@@ -197,10 +246,8 @@ const AttendancePage = () => {
         </table>
       </div>
 
-     
       <StatsCards stats={stats} />
 
-    
       <div style={{
         marginTop: '24px',
         padding: '16px',
@@ -220,7 +267,7 @@ const AttendancePage = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#fef9c3', borderRadius: '4px' }}></span>
-            <span>انذار اول  (15% الي 25%)</span>
+            <span>انذار اول (15% الي 25%)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#ffedd5', borderRadius: '4px' }}></span>
