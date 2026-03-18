@@ -14,25 +14,35 @@ export default function AddRequest() {
     const [loading, setLoading] = useState(false);
 
     const submitData = async () => {
-      // 1. فحص البيانات (بدون باسورد)
+      // 1. فحص البيانات الأساسية
       if (!name || !nationalId || !email) {
         const msg = "All fields are required!";
-        if (Platform.OS === 'web') {
-            alert(msg);
-        } else {
-            Alert.alert("Input Error", msg);
-        }
+        if (Platform.OS === 'web') { alert(msg); } else { Alert.alert("Input Error", msg); }
         return;
       }
 
       if (nationalId.length !== 14) {
         const msg = "National ID must be exactly 14 digits!";
-        if (Platform.OS === 'web') {
-            alert(msg);
-        } else {
-            Alert.alert("Security Error", msg);
-        }
+        if (Platform.OS === 'web') { alert(msg); } else { Alert.alert("Security Error", msg); }
         return;
+      }
+
+      const emailLower = email.trim().toLowerCase();
+      const studentDomain = "@std.sci.cu.edu.eg";
+      const instructorDomain = "@sci.cu.edu.eg";
+
+      if (role === 'student') {
+          if (!emailLower.endsWith(studentDomain)) {
+              const msg = `Students must use an email ending with ${studentDomain}`;
+              if (Platform.OS === 'web') { alert(msg); } else { Alert.alert("Email Error", msg); }
+              return;
+          }
+      } else if (role === 'instructor') {
+          if (!emailLower.endsWith(instructorDomain) || emailLower.includes("@std.")) {
+              const msg = `Instructors must use an email ending with ${instructorDomain} (without 'std')`;
+              if (Platform.OS === 'web') { alert(msg); } else { Alert.alert("Email Error", msg); }
+              return;
+          }
       }
 
       setLoading(true);
@@ -42,7 +52,7 @@ export default function AddRequest() {
           nationalId: nationalId, 
           role: role,
           code: role === 'student' ? uniCode : "N/A", 
-          email: email.trim().toLowerCase(),
+          email: emailLower,
           status: "pending",
           type: "new_registration",
           createdAt: serverTimestamp()
@@ -61,11 +71,7 @@ export default function AddRequest() {
       } catch (e) {
         setLoading(false);
         const errorMsg = "Failed to send request. Check your connection.";
-        if (Platform.OS === 'web') {
-            alert(errorMsg);
-        } else {
-            Alert.alert("Error", errorMsg);
-        }
+        if (Platform.OS === 'web') { alert(errorMsg); } else { Alert.alert("Error", errorMsg); }
       }
     };
 
@@ -100,7 +106,7 @@ export default function AddRequest() {
           <Text style={styles.label}>Email Address</Text>
           <TextInput 
             style={styles.input} 
-            placeholder={role === 'instructor' ? "name@sci.edu.eg" : "code@std.sci.edu.eg"} 
+            placeholder={role === 'instructor' ? "name@sci.cu.edu.eg" : "code@std.sci.cu.edu.eg"} 
             placeholderTextColor="#999" 
             keyboardType="email-address" 
             autoCapitalize="none"
