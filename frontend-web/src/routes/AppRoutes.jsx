@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"; // ضفنا Outlet
 import { useAuth } from "../context/AuthContext.jsx";
 
 /* ===== Auth Pages ===== */
@@ -24,7 +24,11 @@ import AttendancePage from "../pages/student/AttendancePage.jsx";
 import CoursesPage from "../pages/student/CoursesPage.jsx";
 import CourseDetails from "../pages/student/CourseDetails.jsx";
 import ProfilePage from "../pages/student/ProfilePage.jsx";
-import ResetPassword from "../pages/student/ResetPassword.jsx"; // صفحة تغيير الباسورد
+import ResetPassword from "../pages/student/ResetPassword.jsx";
+
+/* ===== Instructor Pages (الشغل بتاعك يا بطل) ===== */
+import InstructorLayout from "../components/instructor/InstructorLayout.jsx"; // تأكد من المسار
+import Lectures from "../pages/instructor/Lectures.jsx";
 
 /* ===== 404 Page ===== */
 const NotFound = () => (
@@ -37,34 +41,28 @@ const NotFound = () => (
 /* ===== Admin Protection ===== */
 const ProtectedAdminRoute = ({ children }) => {
   const { user, loading } = useAuth();
-
   if (loading) return null;
-
-  if (!user) {
-    return <Navigate replace to="/login" />;
-  }
-
-  if (user.role !== "admin") {
-    return <Navigate replace to="/404" />;
-  }
-
+  if (!user) return <Navigate replace to="/login" />;
+  if (user.role !== "admin") return <Navigate replace to="/404" />;
   return children;
 };
 
 /* ===== Student Protection ===== */
 const ProtectedStudentRoute = ({ children }) => {
   const { user, loading } = useAuth();
-
   if (loading) return null;
+  if (!user) return <Navigate replace to="/login" />;
+  if (user.role !== "student") return <Navigate replace to="/404" />;
+  return children;
+};
 
-  if (!user) {
-    return <Navigate replace to="/login" />;
-  }
-
-  if (user.role !== "student") {
-    return <Navigate replace to="/404" />;
-  }
-
+/* ===== Instructor Protection (دي اللي ضفناها) ===== */
+const ProtectedInstructorRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate replace to="/login" />;
+  // بنتشيك لو الرول "instructor" عشان نسمح له يدخل
+  if (user.role !== "instructor") return <Navigate replace to="/404" />;
   return children;
 };
 
@@ -112,8 +110,21 @@ const AppRoutes = () => {
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:courseId" element={<CourseDetails />} />
           <Route path="profile" element={<ProfilePage />} />
-          {/* Route جديد لتغيير الباسورد */}
           <Route path="reset-password" element={<ResetPassword />} />
+        </Route>
+
+        {/* ===== Instructor Routes (Protected - شغل المطور الأول) ===== */}
+        <Route
+          path="/instructor"
+          element={
+            <ProtectedInstructorRoute>
+              <InstructorLayout />
+            </ProtectedInstructorRoute>
+          }
+        >
+          {/* الصفحة الرئيسية للدكتور هتكون هي صفحة المحاضرات */}
+          <Route index element={<Lectures />} />
+          <Route path="lectures" element={<Lectures />} />
         </Route>
 
         {/* ===== 404 ===== */}
