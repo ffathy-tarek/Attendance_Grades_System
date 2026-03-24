@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"; // ضفنا Outlet
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
 /* ===== Auth Pages ===== */
@@ -36,7 +36,6 @@ import Grades from "../pages/instructor/Grades";
 import SeeStudents from "../pages/instructor/SeeStudents";
 import InstructorProfile from "../pages/instructor/InstructorProfile";
 
-
 /* ===== 404 Page ===== */
 const NotFound = () => (
   <div style={{ textAlign: "center", marginTop: "100px" }}>
@@ -63,29 +62,16 @@ const ProtectedStudentRoute = ({ children }) => {
   return children;
 };
 
-/* ===== Instructor Protection (دي اللي ضفناها) ===== */
-const ProtectedInstructorRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user) return <Navigate replace to="/login" />;
-  // بنتشيك لو الرول "instructor" عشان نسمح له يدخل
-  if (user.role !== "instructor") return <Navigate replace to="/404" />;
-  return children;
-};
-
 /* ===== Instructor Protection ===== */
 const ProtectedInstructorRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) return <div style={{ padding: "40px" }}>Loading...</div>;
 
-  if (!user) {
-    return <Navigate replace to="/login" />;
-  }
+  if (!user) return <Navigate replace to="/login" />;
 
-  if (user.role !== "instructor") {
+  if (user.role !== "instructor")
     return <Navigate replace to="/404" />;
-  }
 
   return children;
 };
@@ -102,7 +88,7 @@ const AppRoutes = () => {
         <Route path="/forget-password" element={<ForgetPassword />} />
         <Route path="/request-email" element={<RequestEmail />} />
 
-        {/* ===== Admin Routes (Protected) ===== */}
+        {/* ===== Admin Routes ===== */}
         <Route
           path="/admin"
           element={
@@ -119,7 +105,7 @@ const AppRoutes = () => {
           <Route path="subject-students/:id" element={<SubjectStudents />} />
         </Route>
 
-        {/* ===== Student Routes (Protected) ===== */}
+        {/* ===== Student Routes ===== */}
         <Route
           path="/student"
           element={
@@ -137,7 +123,7 @@ const AppRoutes = () => {
           <Route path="reset-password" element={<ResetPassword />} />
         </Route>
 
-        {/* ===== Instructor Routes (Protected) ===== */}
+        {/* ===== Instructor Routes ===== */}
         <Route
           path="/instructor"
           element={
@@ -157,20 +143,6 @@ const AppRoutes = () => {
           <Route path="students" element={<SeeStudents />} />
           <Route path="profile" element={<InstructorProfile />} />
           <Route path="reset-password" element={<ResetPassword />} />
-        </Route>
-
-        {/* ===== Instructor Routes (Protected - شغل المطور الأول) ===== */}
-        <Route
-          path="/instructor"
-          element={
-            <ProtectedInstructorRoute>
-              <InstructorLayout />
-            </ProtectedInstructorRoute>
-          }
-        >
-          {/* الصفحة الرئيسية للدكتور هتكون هي صفحة المحاضرات */}
-          <Route index element={<Lectures />} />
-          <Route path="lectures" element={<Lectures />} />
         </Route>
 
         {/* ===== 404 ===== */}

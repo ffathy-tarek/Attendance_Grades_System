@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
 import { useAuth } from '../../context/AuthContext';
-import { getCoursesForDashboard, getTotalStats } from './coursesData';
+import { getCoursesForDashboard, getTotalStats, takeAttendance, openMapToLocation } from './coursesData';
+import LocationPermission from '../../components/LocationPermission';
+import { db } from '../../firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 const StudentDashboard = () => {
   const { user } = useAuth();
@@ -18,44 +21,179 @@ const StudentDashboard = () => {
     averageGrade: 0
   });
   const [loading, setLoading] = useState(true);
+  const [attendanceLoading, setAttendanceLoading] = useState({});
+  const [message, setMessage] = useState({ courseId: '', text: '', type: '' });
+  const [locationError, setLocationError] = useState(null);
+  const [showLocationPermission, setShowLocationPermission] = useState(false);
+  const [pendingAttendance, setPendingAttendance] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
+  const loadDashboardData = async () => {
+    if (!user?.uid) return;
+
+    try {
+      console.log('🔄 Loading dashboard data for UID:', user.uid);
+      const [coursesData, statsData] = await Promise.all([
+        getCoursesForDashboard(user.uid),
+        getTotalStats(user.uid)
+      ]);
+
+      setCourses(coursesData || []);
+      setStats(statsData || {
+        totalCourses: 0,
+        averageAttendance: 0,
+        perfectAttendance: 0,
+        needingAttention: 0,
+        totalLectures: 0,
+        totalPresent: 0,
+        totalAbsences: 0,
+        averageGrade: 0
+      });
+      setLastUpdated(new Date());
+      console.log('✅ Dashboard data loaded:', coursesData.length, 'courses');
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Real-time listeners
   useEffect(() => {
-    const loadDashboardData = async () => {
-      if (!user?.uid) {
-        setLoading(false);
-        return;
-      }
+    if (!user?.uid) {
+      setLoading(false);
+      return;
+    }
 
-      try {
-        setLoading(true);
-        const [coursesData, statsData] = await Promise.all([
-          getCoursesForDashboard(user.uid),
-          getTotalStats(user.uid)
-        ]);
-
-        setCourses(coursesData || []);
-        setStats(statsData || {
-          totalCourses: 0,
-          averageAttendance: 0,
-          perfectAttendance: 0,
-          needingAttention: 0,
-          totalLectures: 0,
-          totalPresent: 0,
-          totalAbsences: 0,
-          averageGrade: 0
-        });
-      } catch (error) {
-        console.error('Error loading dashboard:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    console.log('🎧 Setting up real-time listeners for UID:', user.uid);
+    setLoading(true);
     loadDashboardData();
+    
+    // ✅ استمع للتغيرات في attendance (من الطالب أو الدكتور)
+    const attendanceRef = collection(db, 'attendance');
+    const attendanceQuery = query(
+      attendanceRef,
+      where('studentId', '==', user.uid),
+      where('status', '==', 'present')
+    );
+    
+    const unsubscribeAttendance = onSnapshot(attendanceQuery, (snapshot) => {
+      console.log('📊 Dashboard: Attendance changed! Total records:', snapshot.size);
+      snapshot.docChanges().forEach(change => {
+        console.log('  - Change type:', change.type);
+        console.log('  - Record ID:', change.doc.id);
+        console.log('  - Data:', change.doc.data());
+      });
+      loadDashboardData();
+    });
+    
+    // ✅ استمع للتغيرات في enrollments
+    const enrollmentsRef = collection(db, 'enrollments');
+    const enrollmentsQuery = query(
+      enrollmentsRef,
+      where('studentId', '==', user.uid)
+    );
+    
+    const unsubscribeEnrollments = onSnapshot(enrollmentsQuery, () => {
+      console.log('✅ Dashboard: Enrollments changed');
+      loadDashboardData();
+    });
+    
+    // ✅ استمع للتغيرات في lecture_sessions
+    const sessionsRef = collection(db, 'lecture_sessions');
+    const unsubscribeSessions = onSnapshot(sessionsRef, () => {
+      console.log('✅ Dashboard: Sessions changed');
+      loadDashboardData();
+    });
+    
+    return () => {
+      console.log('🔴 Dashboard: Cleaning up listeners');
+      unsubscribeAttendance();
+      unsubscribeEnrollments();
+      unsubscribeSessions();
+    };
   }, [user?.uid]);
 
-  const handleTakeAttendance = (course) => {
-    alert(`Starting attendance for ${course.name} with ${course.professor}`);
+  const handleTakeAttendance = async (course) => {
+    setAttendanceLoading(prev => ({ ...prev, [course.id]: true }));
+    setMessage({ courseId: '', text: '', type: '' });
+    setLocationError(null);
+
+    const result = await takeAttendance(user.uid, course.id);
+    
+    if (result.requiresLocation) {
+      setPendingAttendance(course);
+      setShowLocationPermission(true);
+      setMessage({
+        courseId: course.id,
+        text: result.message,
+        type: 'warning'
+      });
+    } else if (result.instructorLocation && !result.success) {
+      setLocationError({
+        courseId: course.id,
+        message: result.message,
+        distance: result.distance,
+        allowedDistance: result.allowedDistance,
+        instructorLocation: result.instructorLocation
+      });
+      setMessage({
+        courseId: course.id,
+        text: result.message,
+        type: 'error'
+      });
+    } else {
+      setMessage({
+        courseId: course.id,
+        text: result.message,
+        type: result.success ? 'success' : 'error'
+      });
+    }
+    
+    setAttendanceLoading(prev => ({ ...prev, [course.id]: false }));
+    
+    setTimeout(() => {
+      setMessage({ courseId: '', text: '', type: '' });
+      setLocationError(null);
+    }, 5000);
+  };
+
+  const handleLocationGranted = async (location) => {
+    setShowLocationPermission(false);
+    if (pendingAttendance) {
+      setAttendanceLoading(prev => ({ ...prev, [pendingAttendance.id]: true }));
+      
+      const result = await takeAttendance(user.uid, pendingAttendance.id);
+      
+      setMessage({
+        courseId: pendingAttendance.id,
+        text: result.message,
+        type: result.success ? 'success' : 'error'
+      });
+      
+      if (result.instructorLocation && !result.success) {
+        setLocationError({
+          courseId: pendingAttendance.id,
+          message: result.message,
+          distance: result.distance,
+          allowedDistance: result.allowedDistance,
+          instructorLocation: result.instructorLocation
+        });
+      }
+      
+      setAttendanceLoading(prev => ({ ...prev, [pendingAttendance.id]: false }));
+      setPendingAttendance(null);
+      
+      setTimeout(() => {
+        setMessage({ courseId: '', text: '', type: '' });
+        setLocationError(null);
+      }, 5000);
+    }
+  };
+
+  const handleLocationDenied = () => {
+    setShowLocationPermission(false);
+    setPendingAttendance(null);
   };
 
   const getGreeting = () => {
@@ -65,17 +203,17 @@ const StudentDashboard = () => {
     return 'Good evening';
   };
 
-  const getAttendanceColor = (percent) => {
-    if (percent >= 90) return '#059669';
-    if (percent >= 80) return '#d97706';
-    return '#dc2626';
+  const getAbsenceColor = (absencePercent) => {
+    if (absencePercent <= 10) return '#059669';
+    if (absencePercent <= 15) return '#d97706';
+    if (absencePercent <= 25) return '#dc2626';
+    return '#991b1b';
   };
 
-  const getWarningMessage = (attendance) => {
-    const absence = 100 - attendance;
-    if (absence > 25) return '🚫 تم حرمانك من المادة';
-    if (absence === 25) return '⚠️ لديك إنذار ثاني في المادة';
-    if (absence >= 15) return '⚠️ لديك إنذار أول في المادة';
+  const getWarningMessage = (absencePercent) => {
+    if (absencePercent > 25) return '🚫 تم حرمانك من المادة';
+    if (absencePercent == 25) return '⚠️ لديك إنذار ثاني في المادة';
+    if (absencePercent >=15) return '⚠️ لديك إنذار أول في المادة';
     return '';
   };
 
@@ -89,8 +227,20 @@ const StudentDashboard = () => {
     );
   }
 
+  const totalAbsencePercent = stats.totalLectures > 0 
+    ? ((stats.totalAbsences / stats.totalLectures) * 100).toFixed(1)
+    : 0;
+
   return (
     <PageLayout>
+      {showLocationPermission && (
+        <LocationPermission
+          onLocationGranted={handleLocationGranted}
+          onLocationDenied={handleLocationDenied}
+          onClose={() => setShowLocationPermission(false)}
+        />
+      )}
+      
       <div className={styles.dashboardHeader}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h1 className={styles.dashboardTitle}>
@@ -117,6 +267,17 @@ const StudentDashboard = () => {
           {user?.academicYear ? `Year ${user.academicYear} • ` : ''}
           {user?.code ? `ID: ${user.code}` : ''}
         </p>
+        <div style={{
+          background: '#e0f2fe',
+          borderRadius: '8px',
+          padding: '4px 12px',
+          marginTop: '8px',
+          display: 'inline-block',
+          fontSize: '11px',
+          color: '#0369a1'
+        }}>
+          🔄 تحديث تلقائي | آخر تحديث: {lastUpdated.toLocaleTimeString()}
+        </div>
       </div>
 
       <div style={{
@@ -134,19 +295,19 @@ const StudentDashboard = () => {
         />
         <StatCard 
           icon="📊"
-          bgColor="#dcfce7"
-          label="Avg Attendance"
-          value={`${stats.averageAttendance}%`}
+          bgColor="#fee2e2"
+          label="Avg Absence"
+          value={`${totalAbsencePercent}%`}
         />
         <StatCard 
           icon="✅"
-          bgColor="#fef9c3"
+          bgColor="#dcfce7"
           label="Perfect Attendance"
           value={stats.perfectAttendance}
         />
         <StatCard 
           icon="⚠️"
-          bgColor="#fee2e2"
+          bgColor="#fef3c7"
           label="Need Attention"
           value={stats.needingAttention}
         />
@@ -167,7 +328,12 @@ const StudentDashboard = () => {
         <div className={styles.coursesGrid}>
           {courses.length > 0 ? (
             courses.map(course => {
-              const warning = getWarningMessage(course.attendance);
+              const absencePercent = course.absencePercent;
+              const warning = getWarningMessage(absencePercent);
+              const isLoading = attendanceLoading[course.id];
+              const msg = message.courseId === course.id ? message : null;
+              const locError = locationError?.courseId === course.id ? locationError : null;
+              
               return (
                 <div key={course.id} className={styles.courseCard}>
                   {warning && (
@@ -187,20 +353,71 @@ const StudentDashboard = () => {
                     <span className={styles.courseCode}>{course.icon}</span>
                     <span 
                       className={styles.courseHours}
-                      style={{ background: getAttendanceColor(course.attendance) }}
+                      style={{ background: getAbsenceColor(absencePercent) }}
                     >
-                      {course.attendance}%
+                      {absencePercent.toFixed(1)}%
                     </span>
                   </div>
 
                   <div className={styles.courseBody}>
                     <h3 className={styles.courseName}>{course.name}</h3>
                     <p className={styles.courseInstructor}>👨‍🏫 {course.professor}</p>
+                    
+                    {locError && (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        background: '#fef3c7',
+                        color: '#92400e',
+                        border: '1px solid #fde68a'
+                      }}>
+                        <div style={{ whiteSpace: 'pre-line' }}>{locError.message}</div>
+                        {locError.instructorLocation && (
+                          <button
+                            onClick={() => openMapToLocation(locError.instructorLocation.latitude, locError.instructorLocation.longitude)}
+                            style={{
+                              marginTop: '8px',
+                              padding: '4px 12px',
+                              background: '#2563eb',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            📍 عرض موقع الدكتور على الخريطة
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    
+                    {msg && msg.text && !locError && (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        textAlign: 'center',
+                        background: msg.type === 'success' ? '#dcfce7' : msg.type === 'warning' ? '#fef3c7' : '#fee2e2',
+                        color: msg.type === 'success' ? '#166534' : msg.type === 'warning' ? '#92400e' : '#991b1b',
+                        whiteSpace: 'pre-line'
+                      }}>
+                        {msg.text}
+                      </div>
+                    )}
+                    
                     <button
                       className={styles.courseButton}
                       onClick={() => handleTakeAttendance(course)}
+                      disabled={isLoading}
+                      style={{
+                        ...(isLoading ? { opacity: 0.6, cursor: 'not-allowed' } : {})
+                      }}
                     >
-                      Take Attendance
+                      {isLoading ? 'جاري التسجيل...' : '📝 تسجيل الحضور'}
                     </button>
                   </div>
                 </div>
