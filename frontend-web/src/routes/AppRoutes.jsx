@@ -24,7 +24,18 @@ import AttendancePage from "../pages/student/AttendancePage.jsx";
 import CoursesPage from "../pages/student/CoursesPage.jsx";
 import CourseDetails from "../pages/student/CourseDetails.jsx";
 import ProfilePage from "../pages/student/ProfilePage.jsx";
-import ResetPassword from "../pages/student/ResetPassword.jsx"; // صفحة تغيير الباسورد
+import ResetPassword from "../pages/student/ResetPassword.jsx";
+
+/* ===== Instructor Pages ===== */
+import InstructorLayout from "../components/instructor/InstructorLayout";
+import InstructorDashboard from "../pages/instructor/InstructorDashboard";
+import InstructorSubjects from "../pages/instructor/InstructorSubjects.jsx";
+import Attendance from "../pages/instructor/Attendance";
+import Lectures from "../pages/instructor/Lectures";
+import Grades from "../pages/instructor/Grades";
+import SeeStudents from "../pages/instructor/SeeStudents";
+import InstructorProfile from "../pages/instructor/InstructorProfile";
+
 
 /* ===== 404 Page ===== */
 const NotFound = () => (
@@ -62,6 +73,23 @@ const ProtectedStudentRoute = ({ children }) => {
   }
 
   if (user.role !== "student") {
+    return <Navigate replace to="/404" />;
+  }
+
+  return children;
+};
+
+/* ===== Instructor Protection ===== */
+const ProtectedInstructorRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) return <div style={{ padding: "40px" }}>Loading...</div>;
+
+  if (!user) {
+    return <Navigate replace to="/login" />;
+  }
+
+  if (user.role !== "instructor") {
     return <Navigate replace to="/404" />;
   }
 
@@ -112,7 +140,28 @@ const AppRoutes = () => {
           <Route path="courses" element={<CoursesPage />} />
           <Route path="courses/:courseId" element={<CourseDetails />} />
           <Route path="profile" element={<ProfilePage />} />
-          {/* Route جديد لتغيير الباسورد */}
+          <Route path="reset-password" element={<ResetPassword />} />
+        </Route>
+
+        {/* ===== Instructor Routes (Protected) ===== */}
+        <Route
+          path="/instructor"
+          element={
+            <ProtectedInstructorRoute>
+              <InstructorLayout />
+            </ProtectedInstructorRoute>
+          }
+        >
+          <Route index element={<InstructorDashboard />} />
+          <Route path="subjects" element={<InstructorSubjects />} />
+          <Route path="lectures" element={<Lectures />} />
+          <Route path="lectures/start/:subjectId" element={<Lectures />} />
+          <Route path="attendance" element={<Attendance />} />
+          <Route path="attendance/:subjectId" element={<Attendance />} />
+          <Route path="grades" element={<Grades />} />
+          <Route path="grades/:subjectId" element={<Grades />} />
+          <Route path="students" element={<SeeStudents />} />
+          <Route path="profile" element={<InstructorProfile />} />
           <Route path="reset-password" element={<ResetPassword />} />
         </Route>
 
