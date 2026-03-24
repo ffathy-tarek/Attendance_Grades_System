@@ -33,7 +33,10 @@ const Login = () => {
           navigate("/admin");
         } else if (role === "student") {
           navigate("/student"); // الطالب يروح StudentDashboard
-        } else {
+        } else if (role === "instructor") {
+          navigate("/instructor"); // الطالب يروح StudentDashboard
+        }
+         else {
           navigate("/404"); // أي role غير معروف
         }
       } else {
