@@ -2,8 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
-import { getCourseById, getGradeDetails } from './coursesData';
+import { 
+  getCourseById, 
+  getGradeDetails, 
+  takeAttendance, 
+  checkActiveSession,
+  openMapToLocation 
+} from './coursesData';
 import { useAuth } from '../../context/AuthContext';
+import LocationPermission from '../../components/LocationPermission';
 
 const CourseDetails = () => {
   const { courseId } = useParams();
@@ -11,6 +18,11 @@ const CourseDetails = () => {
   const [course, setCourse] = useState(null);
   const [gradeDetails, setGradeDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceMessage, setAttendanceMessage] = useState({ text: '', type: '' });
+  const [activeSession, setActiveSession] = useState(null);
+  const [showLocationPermission, setShowLocationPermission] = useState(false);
+  const [locationError, setLocationError] = useState(null);
 
   useEffect(() => {
     const loadCourseDetails = async () => {
@@ -21,13 +33,15 @@ const CourseDetails = () => {
 
       try {
         setLoading(true);
-        const [courseData, gradeData] = await Promise.all([
-          getCourseById(courseId),
-          getGradeDetails(user.uid, courseId)
+        const [courseData, gradeData, session] = await Promise.all([
+          getCourseById(courseId, user.uid),
+          getGradeDetails(user.uid, courseId),
+          checkActiveSession(courseId)
         ]);
 
         setCourse(courseData);
         setGradeDetails(gradeData);
+        setActiveSession(session);
       } catch (error) {
         console.error('Error loading course details:', error);
       } finally {
@@ -37,6 +51,97 @@ const CourseDetails = () => {
 
     loadCourseDetails();
   }, [user?.uid, courseId]);
+
+  const handleTakeAttendance = async () => {
+    setAttendanceLoading(true);
+    setAttendanceMessage({ text: '', type: '' });
+    setLocationError(null);
+
+    const result = await takeAttendance(user.uid, courseId);
+    
+    if (result.requiresLocation) {
+      setShowLocationPermission(true);
+      setAttendanceMessage({
+        text: result.message,
+        type: 'warning'
+      });
+    } else if (result.instructorLocation && !result.success) {
+      setLocationError({
+        message: result.message,
+        distance: result.distance,
+        allowedDistance: result.allowedDistance,
+        instructorLocation: result.instructorLocation
+      });
+      setAttendanceMessage({
+        text: result.message,
+        type: 'error'
+      });
+    } else {
+      setAttendanceMessage({
+        text: result.message,
+        type: result.success ? 'success' : 'error'
+      });
+    }
+    
+    setAttendanceLoading(false);
+    
+    if (result.success) {
+      const session = await checkActiveSession(courseId);
+      setActiveSession(session);
+    }
+    
+    setTimeout(() => {
+      setAttendanceMessage({ text: '', type: '' });
+      setLocationError(null);
+    }, 5000);
+  };
+
+  const handleLocationGranted = async (location) => {
+    setShowLocationPermission(false);
+    setAttendanceLoading(true);
+    setAttendanceMessage({ text: '', type: '' });
+    
+    const result = await takeAttendance(user.uid, courseId);
+    
+    setAttendanceMessage({
+      text: result.message,
+      type: result.success ? 'success' : 'error'
+    });
+    
+    if (result.instructorLocation && !result.success) {
+      setLocationError({
+        message: result.message,
+        distance: result.distance,
+        allowedDistance: result.allowedDistance,
+        instructorLocation: result.instructorLocation
+      });
+    }
+    
+    setAttendanceLoading(false);
+    
+    if (result.success) {
+      const session = await checkActiveSession(courseId);
+      setActiveSession(session);
+    }
+    
+    setTimeout(() => {
+      setAttendanceMessage({ text: '', type: '' });
+      setLocationError(null);
+    }, 5000);
+  };
+
+  const handleLocationDenied = () => {
+    setShowLocationPermission(false);
+    setAttendanceMessage({
+      text: '⚠️ لم يتم تسجيل الحضور لأنك لم تسمح بالوصول إلى الموقع',
+      type: 'error'
+    });
+    setAttendanceLoading(false);
+    
+    setTimeout(() => {
+      setAttendanceMessage({ text: '', type: '' });
+    }, 3000);
+  };
 
   if (loading) {
     return (
@@ -70,6 +175,14 @@ const CourseDetails = () => {
 
   return (
     <PageLayout>
+      {showLocationPermission && (
+        <LocationPermission
+          onLocationGranted={handleLocationGranted}
+          onLocationDenied={handleLocationDenied}
+          onClose={() => setShowLocationPermission(false)}
+        />
+      )}
+      
       <div style={{ 
         background: 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)',
         borderRadius: '20px',
@@ -97,6 +210,144 @@ const CourseDetails = () => {
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Final Grade</div>
           </div>
         </div>
+      </div>
+
+      {/* قسم تسجيل الحضور */}
+      <div style={{
+        background: '#f8fafc',
+        borderRadius: '16px',
+        padding: '24px',
+        marginBottom: '32px',
+        border: '1px solid #e2e8f0'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>
+              📝 تسجيل الحضور
+            </h3>
+            <p style={{ fontSize: '14px', color: '#64748b' }}>
+              {activeSession 
+                ? activeSession.attendanceOpen !== false
+                  ? '🟢 توجد جلسة مفتوحة حالياً - يمكنك تسجيل حضورك'
+                  : '🔴 الدكتور أغلق باب التسجيل لهذه الجلسة'
+                : '🔴 لا توجد جلسة مفتوحة حالياً - لا يمكن تسجيل الحضور'}
+            </p>
+          </div>
+          
+          <button
+            onClick={handleTakeAttendance}
+            disabled={attendanceLoading || !activeSession || activeSession?.attendanceOpen === false}
+            style={{
+              padding: '12px 32px',
+              background: (activeSession && activeSession.attendanceOpen !== false) ? '#2563eb' : '#94a3b8',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              fontWeight: '600',
+              fontSize: '16px',
+              cursor: (activeSession && activeSession.attendanceOpen !== false && !attendanceLoading) ? 'pointer' : 'not-allowed',
+              opacity: attendanceLoading ? 0.7 : 1,
+              transition: 'all 0.2s'
+            }}
+          >
+            {attendanceLoading ? 'جاري التسجيل...' : '📝 تسجيل الحضور'}
+          </button>
+        </div>
+        
+        {/* عرض معلومات موقع الجلسة */}
+        {activeSession && activeSession.instructorLocation && (
+          <div style={{
+            marginTop: '16px',
+            padding: '12px',
+            background: '#e0f2fe',
+            borderRadius: '8px',
+            fontSize: '13px',
+            color: '#0369a1'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span>📍</span>
+              <span style={{ fontWeight: '500' }}>موقع الجلسة:</span>
+            </div>
+            <div style={{ marginLeft: '28px' }}>
+              <div>يجب أن تكون داخل نطاق {activeSession.allowedDistance || 100} متر من موقع الدكتور لتسجيل الحضور</div>
+              <button
+                onClick={() => openMapToLocation(
+                  activeSession.instructorLocation.latitude, 
+                  activeSession.instructorLocation.longitude
+                )}
+                style={{
+                  marginTop: '8px',
+                  padding: '6px 14px',
+                  background: '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>🗺️</span> عرض موقع الدكتور على الخريطة
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* عرض رسائل الخطأ/الموقع */}
+        {locationError && (
+          <div style={{
+            marginTop: '16px',
+            padding: '12px',
+            borderRadius: '8px',
+            background: '#fef3c7',
+            color: '#92400e',
+            border: '1px solid #fde68a',
+            fontSize: '13px'
+          }}>
+            <div style={{ whiteSpace: 'pre-line' }}>{locationError.message}</div>
+            {locationError.instructorLocation && (
+              <button
+                onClick={() => openMapToLocation(
+                  locationError.instructorLocation.latitude, 
+                  locationError.instructorLocation.longitude
+                )}
+                style={{
+                  marginTop: '10px',
+                  padding: '6px 14px',
+                  background: '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>🗺️</span> عرض موقع الدكتور على الخريطة
+              </button>
+            )}
+          </div>
+        )}
+        
+        {/* عرض الرسائل العامة */}
+        {attendanceMessage.text && !locationError && (
+          <div style={{
+            marginTop: '16px',
+            padding: '12px',
+            borderRadius: '8px',
+            background: attendanceMessage.type === 'success' ? '#dcfce7' : attendanceMessage.type === 'warning' ? '#fef3c7' : '#fee2e2',
+            color: attendanceMessage.type === 'success' ? '#166534' : attendanceMessage.type === 'warning' ? '#92400e' : '#991b1b',
+            fontSize: '14px',
+            textAlign: 'center',
+            whiteSpace: 'pre-line'
+          }}>
+            {attendanceMessage.text}
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: '48px' }}>
@@ -214,7 +465,7 @@ const CourseDetails = () => {
         {course.lectures?.map((lec, idx) => (
           <div key={idx} className={styles.courseCard} style={{ 
             padding: '20px',
-            borderLeft: lec.attended ? '4px solid #059669' : '4px solid #dc2626'
+            borderLeft: lec.attended ? '4px solid #059669' : lec.missed ? '4px solid #dc2626' : '4px solid #94a3b8'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
               <span style={{
@@ -227,14 +478,14 @@ const CourseDetails = () => {
                 {lec.type}
               </span>
               <span style={{
-                background: lec.attended ? '#d1fae5' : '#fee2e2',
-                color: lec.attended ? '#059669' : '#dc2626',
+                background: lec.attended ? '#d1fae5' : lec.missed ? '#fee2e2' : '#f1f5f9',
+                color: lec.attended ? '#059669' : lec.missed ? '#dc2626' : '#64748b',
                 padding: '4px 12px',
                 borderRadius: '30px',
                 fontSize: '13px',
                 fontWeight: 600
               }}>
-                {lec.attended ? 'Attended' : 'Missed'}
+                {lec.attended ? 'Attended' : lec.missed ? 'Missed' : 'Not Recorded'}
               </span>
             </div>
             <h4 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '8px' }}>
@@ -248,6 +499,18 @@ const CourseDetails = () => {
                 day: 'numeric' 
               })}
             </div>
+            {lec.attendanceOpen === false && (
+              <div style={{
+                marginTop: '8px',
+                padding: '4px 8px',
+                background: '#fef3c7',
+                borderRadius: '6px',
+                fontSize: '11px',
+                color: '#92400e'
+              }}>
+                🔒 تم إغلاق باب التسجيل لهذه المحاضرة
+              </div>
+            )}
           </div>
         ))}
       </div>
