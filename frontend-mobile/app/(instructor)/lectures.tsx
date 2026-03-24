@@ -5,7 +5,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot,
 import * as Location from 'expo-location'; 
 import { useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg';
+// تم حذف QRCode
 
 interface LectureSession {
   id: string;
@@ -17,6 +17,7 @@ interface LectureSession {
   endTime?: any;
   instructorLocation?: any;
   attendanceCount?: number;
+  attendanceOpen?: boolean; // حقل التحكم
 }
 
 export default function LecturesScreen() {
@@ -26,7 +27,7 @@ export default function LecturesScreen() {
   const [courses, setCourses] = useState<any[]>([]);
   const [showCoursePicker, setShowCoursePicker] = useState(false);
   const [activeSession, setActiveSession] = useState<LectureSession | null>(null);
-  const [isQRVisible, setIsQRVisible] = useState(false);
+  const [isQRVisible, setIsQRVisible] = useState(false); 
   const [selectedDuration, setSelectedDuration] = useState("1 hour");
 
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
@@ -62,6 +63,54 @@ export default function LecturesScreen() {
     return () => unsub();
   }, []);
 
+  const startSession = async (course: any) => {
+    setLoading(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { Alert.alert("Error", "Location Required"); setLoading(false); return; }
+      let loc = await Location.getCurrentPositionAsync({});
+
+      await addDoc(collection(db, "lecture_sessions"), {
+        courseId: course.id,
+        courseName: course.name || course.courseName,
+        instructorId: auth.currentUser?.uid,
+        startTime: serverTimestamp(),
+        status: "active",
+        attendanceOpen: false, 
+        durationMinutes: selectedDuration, 
+        instructorLocation: new GeoPoint(loc.coords.latitude, loc.coords.longitude)
+      });
+      setShowCoursePicker(false);
+      setIsQRVisible(true);
+    } catch (e) { Alert.alert("Error", "Check Connection"); }
+    setLoading(false);
+  };
+
+  const toggleAttendance = async (isOpen: boolean) => {
+    if (!activeSession?.id) return;
+    try {
+      await updateDoc(doc(db, "lecture_sessions", activeSession.id), {
+        attendanceOpen: isOpen
+      });
+    } catch (e) { Alert.alert("Error", "Failed to update"); }
+  };
+
+  const endSession = async () => {
+    if (activeSession?.id) {
+      const sid = activeSession.id; 
+      try {
+        await updateDoc(doc(db, "lecture_sessions", sid), { 
+          status: "ended", 
+          attendanceOpen: false,
+          endTime: serverTimestamp() 
+        });
+        setIsQRVisible(false);
+      } catch (e) {
+        Alert.alert("Error", "Could not end session");
+      }
+    }
+  };
+
   const calculateDuration = (start: any, end: any) => {
     if (!start || !end) return "N/A";
     const diff = end.seconds - start.seconds;
@@ -92,35 +141,6 @@ export default function LecturesScreen() {
     setDetailsLoading(false);
   };
 
-  const startSession = async (course: any) => {
-    setLoading(true);
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { Alert.alert("Error", "Location Required"); setLoading(false); return; }
-      let loc = await Location.getCurrentPositionAsync({});
-
-      await addDoc(collection(db, "lecture_sessions"), {
-        courseId: course.id,
-        courseName: course.name || course.courseName,
-        instructorId: auth.currentUser?.uid,
-        startTime: serverTimestamp(),
-        status: "active",
-        durationMinutes: selectedDuration, 
-        instructorLocation: new GeoPoint(loc.coords.latitude, loc.coords.longitude) // GeoPoint
-      });
-      setShowCoursePicker(false);
-      setIsQRVisible(true);
-    } catch (e) { Alert.alert("Error", "Check Connection"); }
-    setLoading(false);
-  };
-
-  const endSession = async () => {
-    if (activeSession) {
-      await updateDoc(doc(db, "lecture_sessions", activeSession.id), { status: "ended", endTime: serverTimestamp() });
-      setIsQRVisible(false);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -130,9 +150,9 @@ export default function LecturesScreen() {
       </View>
 
       {activeSession && (
-        <TouchableOpacity style={styles.liveBar} onPress={() => setIsQRVisible(true)}>
+        <TouchableOpacity style={[styles.liveBar, {backgroundColor: activeSession.attendanceOpen ? '#22c55e' : '#f59e0b'}]} onPress={() => setIsQRVisible(true)}>
           <Ionicons name="radio-button-on" size={18} color="#fff" />
-          <Text style={styles.liveBarTxt}>Live: {activeSession.courseName} (Tap for QR)</Text>
+          <Text style={styles.liveBarTxt}>Live: {activeSession.courseName} (Tap to Manage)</Text>
         </TouchableOpacity>
       )}
 
@@ -148,15 +168,53 @@ export default function LecturesScreen() {
                   {item.status === 'ended' && <Text style={styles.detailTxt}>⏱ {calculateDuration(item.startTime, item.endTime)}</Text>}
                 </View>
               </View>
-              <Ionicons name={item.status === 'active' ? "qr-code" : "chevron-forward"} size={22} color={item.status === 'active' ? "#22c55e" : "#cbd5e1"} />
+              <Ionicons name={item.status === 'active' ? "settings-outline" : "chevron-forward"} size={22} color={item.status === 'active' ? "#22c55e" : "#cbd5e1"} />
             </TouchableOpacity>
           );
       }} />
 
+      <Modal visible={isQRVisible} animationType="slide">
+        <View style={styles.qrContainer}>
+          <TouchableOpacity style={styles.closeBtn} onPress={() => setIsQRVisible(false)}>
+            <Ionicons name="close-circle" size={40} color="#cbd5e1" />
+          </TouchableOpacity>
+
+          <Text style={styles.qrTitle}>{activeSession?.courseName}</Text>
+          
+          <View style={styles.controlBox}>
+            <Text style={{fontWeight:'bold', marginBottom:10, color:'#64748b'}}>Attendance Broadcast:</Text>
+            {!activeSession?.attendanceOpen ? (
+              <TouchableOpacity style={styles.openBtn} onPress={() => toggleAttendance(true)}>
+                <Ionicons name="play-circle" size={24} color="#fff" />
+                <Text style={{color:'#fff', fontWeight:'bold'}}>Open For Students</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.closeAttendBtn} onPress={() => toggleAttendance(false)}>
+                <Ionicons name="stop-circle" size={24} color="#fff" />
+                <Text style={{color:'#fff', fontWeight:'bold'}}>Close For Students</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.gpsTag}>
+            <Ionicons name="location" size={18} color="#22c55e" />
+            <Text style={{color: '#22c55e', fontWeight: 'bold'}}>GPS Shield Active (100m)</Text>
+          </View>
+
+          <TouchableOpacity style={styles.manualBtn} onPress={() => { setIsQRVisible(false); router.push('/attendance'); }}>
+            <Ionicons name="people-outline" size={22} color="#1a3a8a" />
+            <Text style={styles.manualBtnTxt}>Current Attendance List</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.endBtn} onPress={endSession}>
+            <Text style={{color:'#fff', fontWeight:'bold', fontSize: 16}}>Finish & Close Session</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       <Modal visible={showCoursePicker} animationType="slide" transparent>
         <View style={styles.modalOverlay}><View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Lecture Setup</Text>
-          <Text style={styles.label}>Select Duration:</Text>
           <View style={styles.durationRow}>
             {["1 hour", "2 hours", "3 hours"].map(d => (
               <TouchableOpacity key={d} style={[styles.dChip, selectedDuration === d && styles.dChipActive]} onPress={() => setSelectedDuration(d)}>
@@ -164,7 +222,6 @@ export default function LecturesScreen() {
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={styles.label}>Select Subject:</Text>
           {courses.map(c=>(<TouchableOpacity key={c.id} style={styles.item} onPress={()=>startSession(c)}><Text style={{fontWeight:'bold', color:'#1a3a8a'}}>{c.name || c.courseName}</Text></TouchableOpacity>))}
           <TouchableOpacity onPress={()=>setShowCoursePicker(false)}><Text style={{color:'red', textAlign:'center', marginTop:15, fontWeight:'bold'}}>Cancel</Text></TouchableOpacity>
         </View></View>
@@ -184,30 +241,6 @@ export default function LecturesScreen() {
         </View></View>
       </Modal>
 
-      {activeSession && (
-        <Modal visible={isQRVisible} animationType="fade">
-          <View style={styles.qrContainer}>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setIsQRVisible(false)}>
-              <Ionicons name="close-circle" size={40} color="#cbd5e1" />
-            </TouchableOpacity>
-
-            <Text style={styles.qrTitle}>{activeSession.courseName}</Text>
-            <View style={styles.qrBox}><QRCode value={activeSession.id} size={250} color="#1a3a8a" /></View>
-            
-            <View style={styles.gpsTag}>
-              <Ionicons name="location" size={18} color="#22c55e" />
-              <Text style={{color: '#22c55e', fontWeight: 'bold'}}>GPS Protection Enabled</Text>
-            </View>
-
-            <TouchableOpacity style={styles.manualBtn} onPress={() => { setIsQRVisible(false); router.push('/attendance'); }}>
-              <Ionicons name="people-outline" size={22} color="#1a3a8a" />
-              <Text style={styles.manualBtnTxt}>Go to Manual Attendance</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.endBtn} onPress={endSession}><Text style={{color:'#fff', fontWeight:'bold', fontSize: 16}}>Finish & Close Session</Text></TouchableOpacity>
-          </View>
-        </Modal>
-      )}
     </SafeAreaView>
   );
 }
@@ -219,7 +252,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
   newBtn: { backgroundColor: '#1a3a8a', padding: 10, borderRadius: 10 },
   newBtnTxt: { color: '#fff', fontWeight: 'bold' },
-  liveBar: { backgroundColor: '#22c55e', padding: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  liveBar: { padding: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
   liveBarTxt: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   card: { backgroundColor: '#fff', padding: 18, borderRadius: 20, marginHorizontal: 20, marginBottom: 12, flexDirection: 'row', alignItems: 'center', elevation: 2 },
   cardTitle: { fontWeight: 'bold', color: '#1a3a8a', fontSize: 16 },
@@ -228,20 +261,21 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 30 },
   modalContent: { backgroundColor: '#fff', borderRadius: 25, padding: 25 },
   modalTitle: { fontWeight: 'bold', marginBottom: 20, textAlign: 'center', fontSize: 18, color: '#1a3a8a' },
-  label: { fontSize: 12, color: '#64748b', fontWeight: 'bold', marginBottom: 8 },
   durationRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  dChip: { flex:1, padding: 12, borderRadius: 12, backgroundColor: '#f1f5f9', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  dChip: { flex:1, padding: 12, borderRadius: 12, backgroundColor: '#f1f5f9', alignItems: 'center' },
   dChipActive: { backgroundColor: '#1a3a8a' },
   item: { padding: 18, backgroundColor: '#f8fafc', borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#f1f5f9' },
+  qrContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 30 },
+  closeBtn: { position: 'absolute', top: 50, right: 30 },
+  qrTitle: { fontSize: 24, fontWeight: 'bold', color: '#1a3a8a', marginBottom: 20 },
+  controlBox: { width:'100%', padding:20, backgroundColor:'#f8fafc', borderRadius:20, marginBottom:20 },
+  openBtn: { backgroundColor: '#22c55e', padding: 15, borderRadius: 15, flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  closeAttendBtn: { backgroundColor: '#f59e0b', padding: 15, borderRadius: 15, flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  gpsTag: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 5 },
+  manualBtn: { marginTop: 30, padding: 18, borderRadius: 15, borderWidth: 1.5, borderColor: '#1a3a8a', width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  manualBtnTxt: { color: '#1a3a8a', fontWeight: 'bold' },
+  endBtn: { marginTop: 15, backgroundColor: '#ef4444', padding: 20, borderRadius: 15, width: '100%', alignItems: 'center' },
   detailsContent: { backgroundColor: '#fff', borderRadius: 30, maxHeight: '80%', padding: 25 },
   detailsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   studentItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  qrContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 30 },
-  closeBtn: { position: 'absolute', top: 50, right: 30 },
-  qrTitle: { fontSize: 24, fontWeight: 'bold', color: '#1a3a8a', marginBottom: 40 },
-  qrBox: { padding: 25, backgroundColor: '#fff', elevation: 20, borderRadius: 30 },
-  gpsTag: { flexDirection: 'row', alignItems: 'center', marginTop: 20, gap: 5 },
-  manualBtn: { marginTop: 40, padding: 18, borderRadius: 15, borderWidth: 1.5, borderColor: '#1a3a8a', width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 10, backgroundColor: '#f0f7ff' },
-  manualBtnTxt: { color: '#1a3a8a', fontWeight: 'bold' },
-  endBtn: { marginTop: 15, backgroundColor: '#ef4444', padding: 20, borderRadius: 15, width: '100%', alignItems: 'center', elevation: 5 }
 });
