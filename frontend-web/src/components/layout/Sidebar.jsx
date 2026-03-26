@@ -3,6 +3,7 @@ import { useState } from "react";
 import { auth } from "../../firebase";
 import { signOut } from "firebase/auth";
 import { FiLogOut, FiLock } from "react-icons/fi";
+
 // استدعاء الدالة الجينيرال من ملف الخدمات
 import { handleInternalChangePassword } from "../../services/generalResetPassword";
 
@@ -17,7 +18,7 @@ const Sidebar = () => {
   // دالة تسجيل الخروج مع رسالة تأكيد
   const handleLogout = async () => {
     const confirmLogout = window.confirm("Are you sure you want to logout?");
-    
+
     if (confirmLogout) {
       try {
         await signOut(auth);
@@ -71,19 +72,24 @@ const Sidebar = () => {
           <NavLink to="/admin" end style={linkStyle}>
             Dashboard
           </NavLink>
-
           <NavLink to="/admin/students" style={linkStyle}>
             Students
           </NavLink>
-
           <NavLink to="/admin/instructors" style={linkStyle}>
             Instructors
           </NavLink>
 
+          {/* ----- التعديل المطلوب: تم استخدام linkStyle لضمان عمل الرابط بدون Errors ----- */}
+          <NavLink to="/instructor/attendance" style={linkStyle}>
+            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              📋 Attendance
+            </span>
+          </NavLink>
+          {/* ------------------------------------------------------------------------- */}
+
           <NavLink to="/admin/subjects" style={linkStyle}>
             Subjects
           </NavLink>
-
           <NavLink to="/admin/pending-accounts" style={linkStyle}>
             Pending Accounts
           </NavLink>
@@ -91,18 +97,12 @@ const Sidebar = () => {
 
         {/* Buttons Section */}
         <div style={{ marginTop: "auto" }}>
-          <button
-            onClick={() => setShowModal(true)}
-            style={changePasswordBtn}
-          >
+          <button onClick={() => setShowModal(true)} style={changePasswordBtn}>
             <FiLock style={{ marginRight: "8px" }} />
             Reset Password
           </button>
 
-          <button
-            onClick={handleLogout}
-            style={logoutBtn}
-          >
+          <button onClick={handleLogout} style={logoutBtn}>
             <FiLogOut style={{ marginRight: "8px" }} />
             Logout
           </button>
@@ -144,10 +144,7 @@ const Sidebar = () => {
                 Save
               </button>
 
-              <button
-                onClick={() => setShowModal(false)}
-                style={cancelBtn}
-              >
+              <button onClick={() => setShowModal(false)} style={cancelBtn}>
                 Cancel
               </button>
             </div>
@@ -158,7 +155,7 @@ const Sidebar = () => {
   );
 };
 
-/* ===== Styles ===== */
+/* ===== Styles كما هي بدون تغيير ===== */
 
 const sidebarStyle = {
   width: "230px",
@@ -185,9 +182,7 @@ const linkStyle = ({ isActive }) => ({
   borderRadius: "8px",
   textDecoration: "none",
   color: "white",
-  backgroundColor: isActive
-    ? "var(--color-secondary)"
-    : "transparent",
+  backgroundColor: isActive ? "var(--color-secondary)" : "transparent",
   transition: "0.2s",
 });
 

@@ -36,19 +36,19 @@ const Lectures = () => {
   useEffect(() => {
     if (!user) return;
 
-    // جلب المواد الخاصة بالمدرب من courses
+    // جلب المواد الخاصة بالمدرب
     const fetchCourses = async () => {
       try {
         const coursesQuery = query(
           collection(db, "courses"),
-          where("instructorIds", "array-contains", user.uid)
+          where("instructorIds", "array-contains", user.uid),
         );
         const coursesSnap = await getDocs(coursesQuery);
         setCourses(
           coursesSnap.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
-          }))
+          })),
         );
       } catch (e) {
         console.error(e);
@@ -57,11 +57,11 @@ const Lectures = () => {
 
     fetchCourses();
 
-    // متابعة جلسات المحاضرات من lecture_sessions
+    // متابعة جلسات المحاضرات
     const qHistory = query(
       collection(db, "lecture_sessions"),
       where("instructorId", "==", user.uid),
-      orderBy("startTime", "desc")
+      orderBy("startTime", "desc"),
     );
 
     const unsubscribe = onSnapshot(qHistory, async (snapshot) => {
@@ -69,7 +69,7 @@ const Lectures = () => {
         snapshot.docs.map(async (lectureDoc) => {
           const attendanceQuery = query(
             collection(db, "attendance"),
-            where("lectureId", "==", lectureDoc.id)
+            where("lectureId", "==", lectureDoc.id),
           );
           const attendanceSnap = await getDocs(attendanceQuery);
 
@@ -78,25 +78,28 @@ const Lectures = () => {
             ...lectureDoc.data(),
             attendanceCount: attendanceSnap.size,
           };
-        })
+        }),
       );
 
       setHistory(docs);
 
       const active = docs.find((d) => d.status === "active");
       setActiveSession(active || null);
-      
+
       if (active && active.currentAttendanceId) {
         const attendanceQuery = query(
           collection(db, "attendance"),
           where("lectureId", "==", active.id),
-          where("status", "==", "active")
+          where("status", "==", "active"),
         );
         const attendanceSnap = await getDocs(attendanceQuery);
         if (!attendanceSnap.empty) {
           setAttendanceActive(true);
           setCurrentAttendanceId(attendanceSnap.docs[0].id);
         }
+      } else {
+        setAttendanceActive(false);
+        setCurrentAttendanceId(null);
       }
 
       setLoading(false);
@@ -110,7 +113,7 @@ const Lectures = () => {
     if (!attendanceTimeLeft || attendanceTimeLeft <= 0) return;
 
     const timer = setInterval(() => {
-      setAttendanceTimeLeft(prev => {
+      setAttendanceTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
           return 0;
@@ -169,11 +172,13 @@ const Lectures = () => {
       });
       setAttendanceActive(false);
       setCurrentAttendanceId(null);
+      setAttendanceTimeLeft(null);
     } catch (error) {
       console.error(error);
     }
   };
 
+  // ==================== Start Attendance + Auto Navigate ====================
   const startAttendance = async () => {
     if (!activeSession) return;
 
@@ -199,6 +204,11 @@ const Lectures = () => {
       setAttendanceActive(true);
       setCurrentAttendanceId(attendanceRef.id);
       setAttendanceTimeLeft(attendanceDuration * 60);
+
+      // التنقل التلقائي إلى صفحة Attendance Management
+      setTimeout(() => {
+        navigate(`/instructor/attendance/${activeSession.courseId}`);
+      }, 800);
     } catch (error) {
       console.error(error);
       alert("Error starting attendance session");
@@ -227,12 +237,12 @@ const Lectures = () => {
   };
 
   return (
-    <PageLayout 
-      title="Lectures Management" 
+    <PageLayout
+      title="Lectures Management"
       subtitle="Start and manage your lecture sessions"
       actions={
         !activeSession && (
-          <button 
+          <button
             className={styles.saveButton}
             onClick={() => setShowCoursePicker(true)}
           >
@@ -243,41 +253,84 @@ const Lectures = () => {
     >
       {/* Active Lecture */}
       {activeSession && (
-        <div className={styles.card} style={{ marginBottom: "24px", background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)", color: "white" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+        <div
+          className={styles.card}
+          style={{
+            marginBottom: "24px",
+            background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+            color: "white",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "16px",
+            }}
+          >
             <div>
-              <h3 style={{ fontSize: "20px", marginBottom: "8px" }}>🔴 Live Session</h3>
-              <p><strong>{activeSession.courseName}</strong></p>
+              <h3 style={{ fontSize: "20px", marginBottom: "8px" }}>
+                🔴 Live Session
+              </h3>
+              <p>
+                <strong>{activeSession.courseName}</strong>
+              </p>
               <p>Started: {formatDate(activeSession.startTime)}</p>
               <p>Duration: {activeSession.duration} hours</p>
             </div>
             <div>
               {!attendanceActive ? (
-                <button 
+                <button
                   onClick={startAttendance}
                   className={styles.courseButton}
-                  style={{ background: "white", color: "#16a34a", marginBottom: "8px" }}
+                  style={{
+                    background: "white",
+                    color: "#16a34a",
+                    marginBottom: "8px",
+                  }}
                 >
                   Start Attendance
                 </button>
               ) : (
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "24px", fontWeight: "bold", background: "white", color: "#16a34a", padding: "8px 16px", borderRadius: "12px", marginBottom: "8px" }}>
+                  <div
+                    style={{
+                      fontSize: "24px",
+                      fontWeight: "bold",
+                      background: "white",
+                      color: "#16a34a",
+                      padding: "8px 16px",
+                      borderRadius: "12px",
+                      marginBottom: "8px",
+                    }}
+                  >
                     ⏱️ {formatTime(attendanceTimeLeft)}
                   </div>
-                  <button 
+                  <button
                     onClick={closeAttendance}
                     className={styles.cancelButton}
-                    style={{ background: "#ef4444", color: "white", border: "none" }}
+                    style={{
+                      background: "#ef4444",
+                      color: "white",
+                      border: "none",
+                    }}
                   >
                     Close Early
                   </button>
                 </div>
               )}
-              <button 
+              <button
                 onClick={endLecture}
                 className={styles.cancelButton}
-                style={{ background: "#ef4444", color: "white", border: "none", marginTop: "8px", width: "100%" }}
+                style={{
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  marginTop: "8px",
+                  width: "100%",
+                }}
               >
                 End Lecture
               </button>
@@ -290,7 +343,15 @@ const Lectures = () => {
       {activeSession && !attendanceActive && (
         <div className={styles.card} style={{ marginBottom: "24px" }}>
           <h3>Attendance Settings</h3>
-          <div style={{ display: "flex", gap: "16px", alignItems: "flex-end", flexWrap: "wrap", marginTop: "16px" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "16px",
+              alignItems: "flex-end",
+              flexWrap: "wrap",
+              marginTop: "16px",
+            }}
+          >
             <div>
               <label className={styles.summaryLabel}>Duration (minutes)</label>
               <input
@@ -332,24 +393,42 @@ const Lectures = () => {
                   border: "1px solid #e2e8f0",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                  }}
+                >
                   <div>
                     <strong>{session.courseName}</strong>
                     <br />
-                    <small style={{ color: "#64748b" }}>Date: {formatDate(session.startTime)}</small>
+                    <small style={{ color: "#64748b" }}>
+                      Date: {formatDate(session.startTime)}
+                    </small>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <span style={{ 
-                      padding: "4px 12px", 
-                      borderRadius: "20px", 
-                      fontSize: "12px",
-                      background: session.status === "active" ? "#22c55e20" : "#64748b20",
-                      color: session.status === "active" ? "#16a34a" : "#475569"
-                    }}>
+                    <span
+                      style={{
+                        padding: "4px 12px",
+                        borderRadius: "20px",
+                        fontSize: "12px",
+                        background:
+                          session.status === "active"
+                            ? "#22c55e20"
+                            : "#64748b20",
+                        color:
+                          session.status === "active" ? "#16a34a" : "#475569",
+                      }}
+                    >
                       {session.status === "active" ? "Active" : "Ended"}
                     </span>
                     <br />
-                    <small>📊 {session.attendanceCount} attendance records</small>
+                    <small>
+                      📊 {session.attendanceCount} attendance records
+                    </small>
                   </div>
                 </div>
               </div>
@@ -374,13 +453,23 @@ const Lectures = () => {
             zIndex: 1000,
           }}
         >
-          <div style={{ background: "white", padding: "24px", borderRadius: "20px", width: "400px", maxWidth: "90%" }}>
+          <div
+            style={{
+              background: "white",
+              padding: "24px",
+              borderRadius: "20px",
+              width: "400px",
+              maxWidth: "90%",
+            }}
+          >
             <h3 style={{ marginBottom: "16px" }}>Select Course</h3>
-            
+
             <div>
-              <label className={styles.summaryLabel}>Lecture Duration (hours)</label>
-              <select 
-                value={selectedDuration} 
+              <label className={styles.summaryLabel}>
+                Lecture Duration (hours)
+              </label>
+              <select
+                value={selectedDuration}
                 onChange={(e) => setSelectedDuration(Number(e.target.value))}
                 className={styles.input}
                 style={{ marginBottom: "16px", width: "100%" }}
@@ -414,7 +503,13 @@ const Lectures = () => {
             ))}
 
             {courses.length === 0 && (
-              <p style={{ color: "#64748b", textAlign: "center", padding: "20px" }}>
+              <p
+                style={{
+                  color: "#64748b",
+                  textAlign: "center",
+                  padding: "20px",
+                }}
+              >
                 No courses assigned
               </p>
             )}

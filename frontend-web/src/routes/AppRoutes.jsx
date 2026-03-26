@@ -35,6 +35,7 @@ import Lectures from "../pages/instructor/Lectures";
 import Grades from "../pages/instructor/Grades";
 import SeeStudents from "../pages/instructor/SeeStudents";
 import InstructorProfile from "../pages/instructor/InstructorProfile";
+import AttendanceManager from "../pages/instructor/AttendanceManager.jsx";
 
 /* ===== 404 Page ===== */
 const NotFound = () => (
@@ -44,35 +45,26 @@ const NotFound = () => (
   </div>
 );
 
-/* ===== Admin Protection ===== */
+/* ===== Protected Routes ===== */
 const ProtectedAdminRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate replace to="/login" />;
-  if (user.role !== "admin") return <Navigate replace to="/404" />;
+  if (!user || user.role !== "admin") return <Navigate replace to="/login" />;
   return children;
 };
 
-/* ===== Student Protection ===== */
 const ProtectedStudentRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate replace to="/login" />;
-  if (user.role !== "student") return <Navigate replace to="/404" />;
+  if (!user || user.role !== "student") return <Navigate replace to="/login" />;
   return children;
 };
 
-/* ===== Instructor Protection ===== */
 const ProtectedInstructorRoute = ({ children }) => {
   const { user, loading } = useAuth();
-
   if (loading) return <div style={{ padding: "40px" }}>Loading...</div>;
-
-  if (!user) return <Navigate replace to="/login" />;
-
-  if (user.role !== "instructor")
-    return <Navigate replace to="/404" />;
-
+  if (!user || user.role !== "instructor")
+    return <Navigate replace to="/login" />;
   return children;
 };
 
@@ -80,11 +72,9 @@ const AppRoutes = () => {
   return (
     <BrowserRouter>
       <Routes>
-
         {/* ===== Auth Routes ===== */}
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/forget-password" element={<ForgetPassword />} />
         <Route path="/request-email" element={<RequestEmail />} />
 
@@ -135,9 +125,19 @@ const AppRoutes = () => {
           <Route index element={<InstructorDashboard />} />
           <Route path="subjects" element={<InstructorSubjects />} />
           <Route path="lectures" element={<Lectures />} />
-          <Route path="lectures/start/:subjectId" element={<Lectures />} />
+
+          {/* Attendance Routes */}
           <Route path="attendance" element={<Attendance />} />
-          <Route path="attendance/:subjectId" element={<Attendance />} />
+
+          {/* المسار الصحيح لإدارة الحضور */}
+          <Route path="attendance/:subjectId" element={<AttendanceManager />} />
+
+          {/* مسار إضافي للتوافق */}
+          <Route
+            path="manage-attendance/:subjectId"
+            element={<AttendanceManager />}
+          />
+
           <Route path="grades" element={<Grades />} />
           <Route path="grades/:subjectId" element={<Grades />} />
           <Route path="students" element={<SeeStudents />} />
@@ -147,10 +147,7 @@ const AppRoutes = () => {
 
         {/* ===== 404 ===== */}
         <Route path="/404" element={<NotFound />} />
-
-        {/* ===== Unknown Routes ===== */}
         <Route path="*" element={<Navigate to="/404" replace />} />
-
       </Routes>
     </BrowserRouter>
   );
