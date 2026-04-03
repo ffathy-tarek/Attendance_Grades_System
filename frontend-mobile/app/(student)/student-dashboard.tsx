@@ -386,7 +386,7 @@ export default function StudentDashboard() {
                 key={course.id}
                 style={s.courseCard}
                 onPress={() => router.push({
-                  pathname: "/student-course-details",
+                  pathname: "/(student)/student-course-details",
                   params: { courseId: course.id }
                 } as any)}
               >
