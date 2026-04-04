@@ -13,18 +13,7 @@ import {
   Platform,
 } from "react-native";
 import { auth, db } from "../../firebaseConfig";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  setDoc,
-  deleteDoc,
-  onSnapshot,
-  getDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { collection, query, where, getDocs, doc, setDoc, deleteDoc, onSnapshot, getDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -33,8 +22,8 @@ export default function ManualAttendance() {
   const [loading, setLoading] = useState(true);
   const [activeSession, setActiveSession] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
-  const [attendanceMap, setAttendanceMap] = useState<any>({});
-  const [attendanceDetails, setAttendanceDetails] = useState<any>({}); // ميزة المطور 5: لتخزين تفاصيل السجل (الوقت، الطريقة)
+  const [attendanceMap, setAttendanceMap] = useState<any>({}); 
+  const [attendanceDetails, setAttendanceDetails] = useState<any>({}); 
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -92,15 +81,12 @@ export default function ManualAttendance() {
       onSnapshot(qAttend, (aSnap) => {
         const map: any = {};
         const details: any = {};
-        aSnap.docs.forEach((d) => {
+        aSnap.docs.forEach(d => {
           const data = d.data();
           map[data.studentId] = d.id;
-          // المطور 5: تخزين تفاصيل السجل للعرض (وقت التسجيل ونوع العملية)
           details[data.studentId] = {
-            time: data.timestamp?.toDate
-              ? data.timestamp.toDate().toLocaleTimeString()
-              : "Pending...",
-            method: data.method || "auto",
+            time: data.timestamp?.toDate ? data.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "...",
+            method: data.method || "auto"
           };
         });
         setAttendanceMap(map);
@@ -113,16 +99,13 @@ export default function ManualAttendance() {
     }
   };
 
-  // --- لوجيك المطور رقم 5 (التحكم الكامل واليدوي) ---
   const toggleAttendance = async (studentId: string, studentName: string) => {
     if (!activeSession) return;
 
     try {
       if (attendanceMap[studentId]) {
-        // حذف طالب (حذف السجل من Firestore)
         await deleteDoc(doc(db, "attendance", attendanceMap[studentId]));
       } else {
-        // إضافة يدوية (Manual Add) - لمنع التلاعب وضمان دقة البيانات
         const attendId = `${activeSession.id}_${studentId}`;
         await setDoc(doc(db, "attendance", attendId), {
           sessionId: activeSession.id,
@@ -131,9 +114,9 @@ export default function ManualAttendance() {
           courseId: activeSession.courseId,
           courseName: activeSession.courseName || "Unknown Course",
           timestamp: serverTimestamp(),
-          method: "manual", // بصمة المطور 5 لتمييز التعديل اليدوي
+          method: "manual", 
           status: "present",
-          instructorId: auth.currentUser?.uid, // لتوثيق من قام بالتحضير اليدوي
+          instructorId: auth.currentUser?.uid, 
         });
       }
     } catch (error) {
@@ -206,38 +189,30 @@ export default function ManualAttendance() {
         contentContainerStyle={{ padding: 20 }}
         renderItem={({ item }) => {
           const isPresent = !!attendanceMap[item.id];
-          const details = attendanceDetails[item.id];
+          const detail = attendanceDetails[item.id];
           return (
-            <View style={[styles.studentCard, isPresent && styles.cardPresent]}>
+            <View style={[styles.studentCard, isPresent ? styles.cardPresent : styles.cardAbsent]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.studentName}>{item.fullName}</Text>
                 <Text style={styles.universityId}>ID: {item.universityId}</Text>
-                {/* المطور 5: عرض تفاصيل الوقت ونوع التحضير */}
                 {isPresent && (
                   <Text style={styles.attendanceTime}>
-                    {details?.method === "manual" ? "🛡️ Manual" : "📱 Auto"} at{" "}
-                    {details?.time}
+                    {detail?.method === "manual" ? "🛡️ Manual" : "📱 Auto"} at {detail?.time}
                   </Text>
                 )}
               </View>
-
               <View style={styles.toggleGroup}>
-                <TouchableOpacity
-                  onPress={() => toggleAttendance(item.id, item.fullName)}
-                  style={[
-                    styles.statusBtn,
-                    isPresent ? styles.presentActive : styles.absentActive,
-                  ]}
+                <TouchableOpacity 
+                  onPress={() => !isPresent && toggleAttendance(item.id, item.fullName)}
+                  style={[styles.statusBtn, isPresent && styles.presentActive]}
                 >
-                  <Ionicons
-                    name={isPresent ? "checkmark-circle" : "close-circle"}
-                    size={16}
-                    color="#fff"
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={styles.statusBtnTxt}>
-                    {isPresent ? "Present" : "Absent"}
-                  </Text>
+                  <Text style={[styles.statusBtnTxt, isPresent && {color: '#fff'}]}>P</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => isPresent && toggleAttendance(item.id, item.fullName)}
+                  style={[styles.statusBtn, !isPresent && styles.absentActive]}
+                >
+                  <Text style={[styles.statusBtnTxt, !isPresent && {color: '#fff'}]}>A</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -249,90 +224,28 @@ export default function ManualAttendance() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc" },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-    paddingTop: Platform.OS === "android" ? 40 : 20,
-  },
-  backBtn: { padding: 8, backgroundColor: "#f1f5f9", borderRadius: 12 },
-  headerTitle: { fontSize: 17, fontWeight: "bold", color: "#1e293b" },
-  courseSubtitle: {
-    fontSize: 12,
-    color: "#1a3a8a",
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    marginHorizontal: 20,
-    marginTop: 20,
-    paddingHorizontal: 15,
-    borderRadius: 15,
-    height: 50,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: "#1e293b" },
-  studentCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 15,
-    marginBottom: 12,
-    elevation: 1,
-  },
-  cardPresent: { borderLeftWidth: 6, borderLeftColor: "#22c55e" },
-  studentName: { fontSize: 15, fontWeight: "700", color: "#1e293b" },
-  universityId: { fontSize: 12, color: "#64748b", marginTop: 2 },
-  attendanceTime: {
-    fontSize: 11,
-    color: "#22c55e",
-    marginTop: 4,
-    fontWeight: "600",
-  },
-  toggleGroup: { flexDirection: "row", alignItems: "center" },
-  statusBtn: {
-    flexDirection: "row",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    minWidth: 95,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  statusBtnTxt: { fontWeight: "bold", fontSize: 12, color: "#fff" },
-  presentActive: { backgroundColor: "#22c55e" },
-  absentActive: { backgroundColor: "#ef4444" },
-  noSessionTxt: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginTop: 20,
-  },
-  noSessionSub: {
-    fontSize: 14,
-    color: "#64748b",
-    textAlign: "center",
-    marginTop: 8,
-    paddingHorizontal: 30,
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  backBtn: { padding: 8, backgroundColor: '#f1f5f9', borderRadius: 12 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
+  courseSubtitle: { fontSize: 12, color: '#64748b', fontWeight: '600' },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 20, paddingHorizontal: 15, borderRadius: 15, height: 50, elevation: 1 },
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: '#1e293b' },
+  studentCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 15, marginBottom: 10, elevation: 1 },
+  
+  cardPresent: { borderLeftWidth: 6, borderLeftColor: "#22c55e" }, 
+  cardAbsent: { borderLeftWidth: 6, borderLeftColor: "#ef4444" },
+  
+  studentName: { fontSize: 15, fontWeight: '600', color: '#1e293b', flex: 1 },
+  universityId: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  attendanceTime: { fontSize: 11, color: '#22c55e', marginTop: 4, fontWeight: 'bold' },
+  
+  toggleGroup: { flexDirection: 'row', gap: 10 },
+  statusBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f1f5f9' },
+  statusBtnTxt: { fontWeight: 'bold', fontSize: 14, color: '#94a3b8' },
+  presentActive: { backgroundColor: '#22c55e' }, 
+  absentActive: { backgroundColor: '#ef4444' }, 
+  noSessionTxt: { fontSize: 18, fontWeight: 'bold', color: '#1e293b', marginTop: 20 },
+  noSessionSub: { fontSize: 14, color: '#64748b', textAlign: 'center', marginTop: 8 }
 });
