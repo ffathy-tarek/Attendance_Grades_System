@@ -36,7 +36,6 @@ const Lectures = () => {
   useEffect(() => {
     if (!user) return;
 
-    // جلب المواد الخاصة بالمدرب
     const fetchCourses = async () => {
       try {
         const coursesQuery = query(
@@ -57,7 +56,6 @@ const Lectures = () => {
 
     fetchCourses();
 
-    // متابعة جلسات المحاضرات
     const qHistory = query(
       collection(db, "lecture_sessions"),
       where("instructorId", "==", user.uid),
@@ -108,22 +106,36 @@ const Lectures = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // Timer for attendance
+  // ==================== [التعديل 1: Timer logic] ====================
   useEffect(() => {
-    if (!attendanceTimeLeft || attendanceTimeLeft <= 0) return;
+    let timer;
 
-    const timer = setInterval(() => {
-      setAttendanceTimeLeft((prev) => {
-        if (prev <= 1) {
+    const updateTimer = () => {
+      // بنحسب الوقت المتبقي بناءً على الفرق بين وقت النهاية المحفوظ والآن
+      if (attendanceActive && activeSession?.endTime) {
+        const end = activeSession.endTime.toDate().getTime();
+        const now = new Date().getTime();
+        const diff = Math.floor((end - now) / 1000);
+
+        if (diff > 0) {
+          setAttendanceTimeLeft(diff);
+        } else {
+          setAttendanceTimeLeft(0);
+          setAttendanceActive(false);
           clearInterval(timer);
-          return 0;
         }
-        return prev - 1;
-      });
-    }, 1000);
+      }
+    };
+
+    if (attendanceActive) {
+      updateTimer(); // تشغيل فوري للحساب
+      timer = setInterval(updateTimer, 1000);
+    } else {
+      setAttendanceTimeLeft(null);
+    }
 
     return () => clearInterval(timer);
-  }, [attendanceTimeLeft]);
+  }, [attendanceActive, activeSession]);
 
   const formatDate = (timestamp) => {
     if (!timestamp) return "Loading...";
@@ -131,6 +143,7 @@ const Lectures = () => {
   };
 
   const formatTime = (seconds) => {
+    if (!seconds || seconds < 0) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;

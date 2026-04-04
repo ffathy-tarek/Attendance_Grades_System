@@ -79,14 +79,6 @@ const Sidebar = () => {
             Instructors
           </NavLink>
 
-          {/* ----- التعديل المطلوب: تم استخدام linkStyle لضمان عمل الرابط بدون Errors ----- */}
-          <NavLink to="/instructor/attendance" style={linkStyle}>
-            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              📋 Attendance
-            </span>
-          </NavLink>
-          {/* ------------------------------------------------------------------------- */}
-
           <NavLink to="/admin/subjects" style={linkStyle}>
             Subjects
           </NavLink>
