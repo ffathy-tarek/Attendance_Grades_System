@@ -191,65 +191,63 @@ const Lectures = () => {
     }
   };
 
-  // ==================== [التعديل 2: startAttendance] ====================
-  const startAttendance = async () => {
-    if (!activeSession) return;
+  // ==================== Start Attendance + Auto Navigate ====================
+const startAttendance = async () => {
+  if (!activeSession) return;
 
-    try {
-      const now = new Date();
-      // حساب وقت النهاية الفعلي بناءً على الدقائق المحددة
-      const endTimeDate = new Date(now.getTime() + attendanceDuration * 60000);
+  try {
+    const endTime = new Date();
+    endTime.setMinutes(endTime.getMinutes() + attendanceDuration);
 
-      const attendanceRef = await addDoc(collection(db, "attendance"), {
-        lectureId: activeSession.id,
-        courseId: activeSession.courseId,
-        instructorId: user.uid,
-        startTime: Timestamp.fromDate(now),
-        endTime: Timestamp.fromDate(endTimeDate), // تخزين وقت النهاية كـ Timestamp
-        duration: attendanceDuration,
-        status: "active",
-        attendees: [],
-      });
+    const attendanceRef = await addDoc(collection(db, "attendance_sessions"), {
+      lectureId: activeSession.id,
+      courseId: activeSession.courseId,
+      instructorId: user.uid,
+      startTime: Timestamp.now(),
+      endTime: Timestamp.fromDate(endTime),
+      duration: attendanceDuration,
+      status: "active"
+    });
 
-      await updateDoc(doc(db, "lecture_sessions", activeSession.id), {
-        currentAttendanceId: attendanceRef.id,
-        // بنخزن وقت النهاية في جلسة المحاضرة كمان عشان الـ useEffect يلقطها فوراً
-        endTime: Timestamp.fromDate(endTimeDate),
-      });
+    await updateDoc(doc(db, "lecture_sessions", activeSession.id), {
+      currentAttendanceId: attendanceRef.id,
+    });
 
-      setAttendanceActive(true);
-      setCurrentAttendanceId(attendanceRef.id);
-      setAttendanceTimeLeft(attendanceDuration * 60);
+    setAttendanceActive(true);
+    setCurrentAttendanceId(attendanceRef.id);
+    setAttendanceTimeLeft(attendanceDuration * 60);
 
-      setTimeout(() => {
-        navigate(`/instructor/attendance/${activeSession.courseId}`);
-      }, 800);
-    } catch (error) {
-      console.error(error);
-      alert("Error starting attendance session");
-    }
-  };
+    setTimeout(() => {
+      navigate(`/instructor/attendance/${activeSession.courseId}`);
+    }, 800);
 
-  const closeAttendance = async () => {
-    if (!currentAttendanceId) return;
+  } catch (error) {
+    console.error(error);
+    alert("Error starting attendance session");
+  }
+};
 
-    try {
-      await updateDoc(doc(db, "attendance", currentAttendanceId), {
-        status: "closed",
-        closedEarly: true,
-      });
+const closeAttendance = async () => {
+  if (!currentAttendanceId) return;
 
-      await updateDoc(doc(db, "lecture_sessions", activeSession.id), {
-        currentAttendanceId: null,
-      });
+  try {
+    await updateDoc(doc(db, "attendance_sessions", currentAttendanceId), {
+      status: "closed",
+      closedEarly: true,
+    });
 
-      setAttendanceActive(false);
-      setCurrentAttendanceId(null);
-      setAttendanceTimeLeft(null);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+    await updateDoc(doc(db, "lecture_sessions", activeSession.id), {
+      currentAttendanceId: null,
+    });
+
+    setAttendanceActive(false);
+    setCurrentAttendanceId(null);
+    setAttendanceTimeLeft(null);
+
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   return (
     <PageLayout

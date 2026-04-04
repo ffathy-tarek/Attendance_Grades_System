@@ -36,54 +36,66 @@ const InstructorProfile = () => {
       try {
         setLoading(true);
         
-        // جلب بيانات المستخدم
+        // ========== 1. جلب بيانات المستخدم ==========
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         const userData = userDoc.data();
         
-        // جلب إحصائيات المدرب
-        const subjectsQuery = query(
-          collection(db, 'subjects'),
-          where('instructors', 'array-contains', user.uid)
+        // ========== 2. جلب المواد من courses (نفس Dashboard) ==========
+        const coursesQuery = query(
+          collection(db, 'courses'),
+          where('instructorIds', 'array-contains', user.uid)
         );
-        const subjectsSnap = await getDocs(subjectsQuery);
+        const coursesSnap = await getDocs(coursesQuery);
+        const subjectsCount = coursesSnap.size;
         
+        // ========== 3. جلب عدد الطلاب من enrollments (نفس Dashboard) ==========
         let totalStudents = 0;
-        subjectsSnap.forEach(doc => {
-          totalStudents += doc.data().students?.length || 0;
-        });
+        for (const course of coursesSnap.docs) {
+          const enrollmentsQuery = query(
+            collection(db, 'enrollments'),
+            where('courseId', '==', course.id)
+          );
+          const enrollmentsSnap = await getDocs(enrollmentsQuery);
+          totalStudents += enrollmentsSnap.size;
+        }
         
+        // ========== 4. جلب عدد المحاضرات من lecture_sessions (نفس Dashboard) ==========
         const lecturesQuery = query(
-          collection(db, 'lectureSessions'),
+          collection(db, 'lecture_sessions'),
           where('instructorId', '==', user.uid)
         );
         const lecturesSnap = await getDocs(lecturesQuery);
+        const lecturesCount = lecturesSnap.size;
         
+        // ========== 5. جلب متوسط الحضور من attendance (نفس Dashboard) ==========
         const attendanceQuery = query(
-          collection(db, 'attendanceSessions'),
+          collection(db, 'attendance'),
           where('instructorId', '==', user.uid)
         );
         const attendanceSnap = await getDocs(attendanceQuery);
         
         let avgAttendance = 0;
         if (attendanceSnap.size > 0) {
-          let totalAttendance = 0;
+          let totalAttendees = 0;
           attendanceSnap.forEach(doc => {
-            totalAttendance += doc.data().attendees?.length || 0;
+            const data = doc.data();
+            const attendeesCount = data.attendees?.length || 0;
+            totalAttendees += attendeesCount;
           });
-          avgAttendance = (totalAttendance / attendanceSnap.size).toFixed(1);
+          avgAttendance = (totalAttendees / (attendanceSnap.size * 10)).toFixed(1);
         }
         
         setProfile({
-          fullName: userData?.fullName || userData?.name || '',
+          fullName: userData?.fullName || userData?.name || user?.displayName || '',
           email: user?.email || '',
           department: userData?.department || 'Computer Science',
           phone: userData?.phone || '',
           office: userData?.office || '',
           title: userData?.title || 'Instructor',
-          joinDate: userData?.joinDate || '2024',
-          subjectsCount: subjectsSnap.size,
+          joinDate: userData?.joinDate || userData?.createdAt?.toDate?.()?.getFullYear() || '2024',
+          subjectsCount: subjectsCount,
           studentsCount: totalStudents,
-          lecturesCount: lecturesSnap.size,
+          lecturesCount: lecturesCount,
           avgAttendance: avgAttendance
         });
         
@@ -209,7 +221,8 @@ const InstructorProfile = () => {
             border: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
-            gap: '16px'
+            gap: '16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
             <div style={{ 
               width: '48px', 
