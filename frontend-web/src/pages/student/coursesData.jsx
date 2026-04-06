@@ -683,10 +683,10 @@ export const markStudentPresent = async (studentId, courseId, sessionId, student
       markedBy: 'student',
       distanceFromDoctor: distance || null
     });
-    return { success: true, message: '✅ تم تسجيل الحضور بنجاح' };
+    return { success: true, message: '✅ Attendance marked successfully' };
   } catch (error) {
     console.error('Error marking present:', error);
-    return { success: false, message: '❌ حدث خطأ أثناء تسجيل الحضور' };
+    return { success: false, message: '❌ Please try again' };
   }
 };
 
@@ -706,10 +706,10 @@ export const markStudentPresentByDoctor = async (studentId, courseId, sessionId)
       markedBy: 'doctor'
     });
     console.log('✅ Attendance marked successfully by doctor');
-    return { success: true, message: '✅ تم تسجيل الحضور بنجاح' };
+    return { success: true, message: '✅ Attendance marked successfully' };
   } catch (error) {
     console.error('Error marking present by doctor:', error);
-    return { success: false, message: '❌ حدث خطأ أثناء تسجيل الحضور' };
+    return { success: false, message: '❌ Please try again' };
   }
 };
 
@@ -720,7 +720,7 @@ export const takeAttendance = async (studentId, courseId) => {
     if (!activeSession) {
       return { 
         success: false, 
-        message: '⚠️ لا توجد جلسة مفتوحة حالياً لهذه المادة' 
+        message: '⚠️ No Session Exists in this time' 
       };
     }
 
@@ -728,7 +728,7 @@ export const takeAttendance = async (studentId, courseId) => {
     if (!isEnrolled) {
       return { 
         success: false, 
-        message: '❌ أنت غير مقيد في هذه المادة' 
+        message: '❌ You Are not Enrroled in this course' 
       };
     }
 
@@ -736,7 +736,7 @@ export const takeAttendance = async (studentId, courseId) => {
     if (hasAttendance) {
       return { 
         success: false, 
-        message: '⚠️ تم تسجيل حضورك بالفعل لهذه الجلسة' 
+        message: '⚠️ You Took the Attedence before' 
       };
     }
 
