@@ -100,7 +100,7 @@ const AttendancePage = () => {
   const filteredAttendance = attendance.filter(a => {
     if (filter === 'all') return true;
     if (filter === 'excellent') return a.status === 'Perfect' || a.status === 'Regular';
-    if (filter === 'needs-improvement') return a.status === 'انذار اول' || a.status === 'انذار ثاني' || a.status === 'حرمان';
+    if (filter === 'needs-improvement') return a.status === 'First warning' || a.status === 'Second warning' || a.status === 'Denied';
     return true;
   });
 
@@ -144,9 +144,9 @@ const AttendancePage = () => {
   const getStatusColor = (status) => {
     switch(status) {
       case 'Perfect': return '#166534';
-      case 'انذار اول': return '#854d0e';
-      case 'انذار ثاني': return '#92400e';
-      case 'حرمان': return '#991b1b';
+      case 'First warning': return '#854d0e';
+      case 'Second warning': return '#92400e';
+      case 'Denied': return '#991b1b';
       default: return '#475569';
     }
   };
@@ -154,9 +154,9 @@ const AttendancePage = () => {
   const getStatusBg = (status) => {
     switch(status) {
       case 'Perfect': return '#dcfce7';
-      case 'انذار اول': return '#fef9c3';
-      case 'انذار ثاني': return '#ffedd5';
-      case 'حرمان': return '#fee2e2';
+      case 'First warning': return '#fef9c3';
+      case 'Second warning': return '#ffedd5';
+      case 'Denied': return '#fee2e2';
       default: return '#f1f5f9';
     }
   };
@@ -165,7 +165,7 @@ const AttendancePage = () => {
     return (
       <PageLayout title="Attendance" subtitle="Track your attendance records">
         <div style={{ textAlign: 'center', padding: '50px' }}>
-          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading....</div>
         </div>
       </PageLayout>
     );
@@ -251,10 +251,10 @@ const AttendancePage = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>🔄</span>
-          <span>البيانات يتم تحديثها تلقائياً عند تسجيل الحضور</span>
+          <span>data updating Automatically</span>
         </div>
         <div>
-          آخر تحديث: {lastUpdated.toLocaleTimeString()}
+        Last Update: {lastUpdated.toLocaleTimeString()}
         </div>
       </div>
 
