@@ -135,7 +135,7 @@ export const calculateDistance = (lat1, lon1, lat2, lon2) => {
 export const getCurrentLocation = () => {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('المتصفح لا يدعم تحديد الموقع'));
+      reject(new Error('Broswer Does not support Location'));
     }
     
     navigator.geolocation.getCurrentPosition(
@@ -150,16 +150,16 @@ export const getCurrentLocation = () => {
         let errorMessage = '';
         switch(error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'لقد قمت برفض إذن الوصول إلى الموقع. يرجى السماح بالوصول إلى الموقع لتسجيل الحضور.';
+            errorMessage = 'please Approve Location permission And try Again.';
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = 'معلومات الموقع غير متوفرة حالياً';
+            errorMessage = 'Location Data Does not exist';
             break;
           case error.TIMEOUT:
-            errorMessage = 'انتهى وقت محاولة الحصول على الموقع';
+            errorMessage = 'Location permission time out';
             break;
           default:
-            errorMessage = 'حدث خطأ في الحصول على الموقع';
+            errorMessage = 'try Again';
         }
         reject(new Error(errorMessage));
       },
@@ -180,7 +180,7 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     if (!sessionSnap.exists()) {
       return { 
         success: false, 
-        message: 'الجلسة غير موجودة' 
+        message: 'session does not exist' 
       };
     }
     
@@ -189,7 +189,7 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     if (session.attendanceOpen !== true) {
       return { 
         success: false, 
-        message: '⚠️ الدكتور أغلق باب تسجيل الحضور لهذه المحاضرة!' 
+        message: '⚠️ The instructor closed the Attendence for this lecture' 
       };
     }
     
@@ -198,7 +198,7 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     if (!instructorLocation || !instructorLocation.latitude || !instructorLocation.longitude) {
       return { 
         success: false, 
-        message: '📍 لم يتم تحديد موقع الدكتور لهذه الجلسة، لا يمكن تسجيل الحضور' 
+        message: '📍 Can not get the instructoe location try again later' 
       };
     }
     
@@ -214,13 +214,13 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     if (distance <= allowedDistance) {
       return { 
         success: true, 
-        message: `✅ أنت داخل النطاق المسموح (${Math.round(distance)} متر)`,
+        message: `✅ you are close to correct location(${Math.round(distance)} Meter)`,
         distance: Math.round(distance)
       };
     } else {
       return { 
         success: false, 
-        message: `❌ أنت بعيد جداً عن القاعة!\nالمسافة: ${Math.round(distance)} متر\nالمسموح: ${allowedDistance} متر\nيجب أن تكون داخل نطاق ${allowedDistance} متر من موقع الدكتور لتسجيل الحضور.`,
+        message: `❌ you are far away for lecture location\ndistance: ${Math.round(distance)} meter\nApproved : ${allowedDistance} meter\nyou have to be around ${allowedDistance} meter from instructor location.`,
         distance: Math.round(distance),
         allowedDistance: allowedDistance,
         instructorLocation: instructorLocation
@@ -230,7 +230,7 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     console.error('Error checking location proximity:', error);
     return { 
       success: false, 
-      message: 'حدث خطأ في التحقق من الموقع' 
+      message: 'can not git the location try again' 
     };
   }
 };
@@ -305,9 +305,9 @@ export const getAttendanceData = async (studentId) => {
         let status = 'Regular';
         const absenceValue = parseFloat(absencePercent);
         if (absencesCount === 0) status = 'Perfect';
-        else if (absenceValue > 25) status = 'حرمان';
-        else if (absenceValue == 25) status = 'انذار ثاني';
-        else if (absenceValue >= 15) status = 'انذار اول';
+        else if (absenceValue > 25) status = 'Denied';
+        else if (absenceValue == 25) status = 'Second warning';
+        else if (absenceValue >= 15) status = 'First warning';
         
         coursesList.push({
           id: courseId,
