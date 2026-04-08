@@ -131,7 +131,8 @@ export default function LecturesScreen() {
         if (uDoc.exists()) {
           list.push({ 
             id: uDoc.id, 
-            name: uDoc.data().fullName, 
+            name: uDoc.data().fullName,
+            status: d.data().status || "present", 
             time: d.data().timestamp?.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
           });
         }
@@ -235,7 +236,13 @@ export default function LecturesScreen() {
           </View>
           {detailsLoading ? <ActivityIndicator color="#1a3a8a" /> : (
             <FlatList data={attendedStudents} keyExtractor={(s)=>s.id} renderItem={({item}) => (
-              <View style={styles.studentItem}><Text style={{fontWeight: '600', color:'#1e293b'}}>{item.name}</Text><Text style={{fontSize: 12, color: '#94a3b8'}}>{item.time}</Text></View>
+              <View style={styles.studentItem}>
+              <View>
+              <Text style={{fontWeight: '600', color:'#1e293b'}}>{item.name}</Text>
+              <Text style={{fontSize: 10, color: '#22c55e', fontWeight: 'bold'}}>{item.status?.toUpperCase() || "PRESENT"}</Text> 
+              </View>
+              <Text style={{fontSize: 12, color: '#94a3b8'}}>{item.time}</Text>
+              </View>
             )} />
           )}
         </View></View>
