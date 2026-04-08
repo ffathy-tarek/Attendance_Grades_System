@@ -69,7 +69,7 @@ const StudentDashboard = () => {
     setLoading(true);
     loadDashboardData();
     
-    // ✅ استمع للتغيرات في attendance (من الطالب أو الدكتور)
+   
     const attendanceRef = collection(db, 'attendance');
     const attendanceQuery = query(
       attendanceRef,
@@ -87,7 +87,7 @@ const StudentDashboard = () => {
       loadDashboardData();
     });
     
-    // ✅ استمع للتغيرات في enrollments
+    
     const enrollmentsRef = collection(db, 'enrollments');
     const enrollmentsQuery = query(
       enrollmentsRef,
@@ -99,7 +99,7 @@ const StudentDashboard = () => {
       loadDashboardData();
     });
     
-    // ✅ استمع للتغيرات في lecture_sessions
+   
     const sessionsRef = collection(db, 'lecture_sessions');
     const unsubscribeSessions = onSnapshot(sessionsRef, () => {
       console.log('✅ Dashboard: Sessions changed');
@@ -211,9 +211,9 @@ const StudentDashboard = () => {
   };
 
   const getWarningMessage = (absencePercent) => {
-    if (absencePercent > 25) return '🚫 تم حرمانك من المادة';
-    if (absencePercent == 25) return '⚠️ لديك إنذار ثاني في المادة';
-    if (absencePercent >=15) return '⚠️ لديك إنذار أول في المادة';
+    if (absencePercent > 25) return '🚫 You have been Denied';
+    if (absencePercent == 25) return '⚠️ You have a Second warning';
+    if (absencePercent >=15) return '⚠️ You have a First warning';
     return '';
   };
 
@@ -221,7 +221,7 @@ const StudentDashboard = () => {
     return (
       <PageLayout>
         <div style={{ textAlign: 'center', padding: '50px' }}>
-          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading....</div>
         </div>
       </PageLayout>
     );
@@ -276,7 +276,7 @@ const StudentDashboard = () => {
           fontSize: '11px',
           color: '#0369a1'
         }}>
-          🔄 تحديث تلقائي | آخر تحديث: {lastUpdated.toLocaleTimeString()}
+          🔄 Last Update | Auto Update {lastUpdated.toLocaleTimeString()}
         </div>
       </div>
 
@@ -388,7 +388,7 @@ const StudentDashboard = () => {
                               cursor: 'pointer'
                             }}
                           >
-                            📍 عرض موقع الدكتور على الخريطة
+                            📍 Show Lecture Location
                           </button>
                         )}
                       </div>
@@ -417,7 +417,7 @@ const StudentDashboard = () => {
                         ...(isLoading ? { opacity: 0.6, cursor: 'not-allowed' } : {})
                       }}
                     >
-                      {isLoading ? 'جاري التسجيل...' : '📝 تسجيل الحضور'}
+                      {isLoading ? 'Taking Attendence..' : '📝 Take Attendence'}
                     </button>
                   </div>
                 </div>
@@ -425,7 +425,7 @@ const StudentDashboard = () => {
             })
           ) : (
             <div style={{ textAlign: 'center', padding: '40px', color: '#64748b', gridColumn: '1/-1' }}>
-              لا توجد مواد مسجلة
+             No Courses Exist..
             </div>
           )}
         </div>
