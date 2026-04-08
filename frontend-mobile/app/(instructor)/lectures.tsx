@@ -5,7 +5,6 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot,
 import * as Location from 'expo-location'; 
 import { useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
-// تم حذف QRCode
 
 interface LectureSession {
   id: string;
@@ -17,7 +16,7 @@ interface LectureSession {
   endTime?: any;
   instructorLocation?: any;
   attendanceCount?: number;
-  attendanceOpen?: boolean; // حقل التحكم
+  attendanceOpen?: boolean; 
 }
 
 export default function LecturesScreen() {
@@ -34,16 +33,53 @@ export default function LecturesScreen() {
   const [attendedStudents, setAttendedStudents] = useState<any[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
+  // التعديل الجديد: تعريف الوقت الحالي لتحديث الصفحة تلقائياً كل دقيقة
+  const [tick, setTick] = useState(0);
+
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
 
+    // تايمر بيلف كل دقيقة (60000 مللي ثانية) عشان يجبر الأبلكيشن يشيك على الوقت
+    const timer = setInterval(() => {
+      setTick(prev => prev + 1);
+    }, 60000);
+
     const qHistory = query(collection(db, "lecture_sessions"), where("instructorId", "==", user.uid));
     const unsub = onSnapshot(qHistory, async (snap) => {
+      const now = new Date(); // التوقيت الحالي
       const docs = await Promise.all(snap.docs.map(async (d) => {
+        const data = d.data();
+        let currentStatus = data.status;
+
+        // --- ميزة القفل التلقائي المضمونة --- [cite: 175]
+        if (currentStatus === 'active' && data.startTime) {
+          const startTime = data.startTime.toDate();
+          
+          // التعامل مع الـ Duration سواء كانت "1 hour" أو رقم فقط
+          const rawDur = data.durationMinutes || "1 hour";
+          const durationValue = parseInt(rawDur);
+          const isHours = rawDur.includes("hour");
+          
+          // حساب وقت النهاية
+          const durationMs = isHours ? durationValue * 60 * 60 * 1000 : durationValue * 60 * 1000;
+          const expirationTime = new Date(startTime.getTime() + durationMs);
+
+          // لو الوقت الحالي تجاوز وقت النهاية
+          if (now > expirationTime) {
+            currentStatus = 'ended';
+            // تحديث الداتابيز فعلياً
+            await updateDoc(doc(db, "lecture_sessions", d.id), { 
+              status: "ended", 
+              attendanceOpen: false,
+              endTime: serverTimestamp() 
+            });
+          }
+        }
+
         const qAttend = query(collection(db, "attendance"), where("sessionId", "==", d.id));
         const attendSnap = await getDocs(qAttend);
-        return { id: d.id, ...d.data(), attendanceCount: attendSnap.size } as LectureSession;
+        return { id: d.id, ...data, status: currentStatus, attendanceCount: attendSnap.size } as LectureSession;
       }));
 
       const sortedDocs = docs.sort((a, b) => (b.startTime?.seconds || 0) - (a.startTime?.seconds || 0));
@@ -60,8 +96,12 @@ export default function LecturesScreen() {
       setCourses(cSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchCourses();
-    return () => unsub();
-  }, []);
+
+    return () => {
+      unsub();
+      clearInterval(timer); // تنظيف التايمر عند الخروج
+    };
+  }, [tick]); // التايمر هيخلي الـ useEffect يشتغل كل دقيقة حتى لو مفيش تغيير في الداتابيز
 
   const startSession = async (course: any) => {
     setLoading(true);
