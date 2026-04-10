@@ -59,7 +59,7 @@ const GradesPage = () => {
       case 'Excellent': return '#166534';
       case 'Very Good': return '#854d0e';
       case 'Good': return '#92400e';
-      case 'Pass': return '#0369a1';
+      case 'Fair': return '#0369a1';
       default: return '#991b1b';
     }
   };
@@ -69,7 +69,7 @@ const GradesPage = () => {
       case 'Excellent': return '#dcfce7';
       case 'Very Good': return '#fef9c3';
       case 'Good': return '#ffedd5';
-      case 'Pass': return '#e0f2fe';
+      case 'Fair': return '#e0f2fe';
       default: return '#fee2e2';
     }
   };
