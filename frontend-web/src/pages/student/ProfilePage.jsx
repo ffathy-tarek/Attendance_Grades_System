@@ -14,7 +14,9 @@ const ProfilePage = () => {
     studentId: "Not Available",
   });
 
+  const [originalProfile, setOriginalProfile] = useState({}); // لتخزين البيانات الأصلية
   const [profileImage, setProfileImage] = useState(null);
+  const [originalProfileImage, setOriginalProfileImage] = useState(null); // الصورة الأصلية
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -43,20 +45,28 @@ const ProfilePage = () => {
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        console.log("Profile data:", data); 
- 
-        setProfile({
+        console.log("Profile data:", data);
+        
+        const profileData = {
           name: data.fullName || data.name || "Not Available",
           email: data.email || auth.currentUser?.email || "Not Available",
           phone: data.phone || "",
           department: data.department || "Not Available",
           level: data.academicYear || data.level ? `level ${data.academicYear || data.level}` : "Not Available",
           studentId: data.code || data.studentId || "Not Available",
-        });
+        };
+        
+        setProfile(profileData);
+        setOriginalProfile(profileData); // حفظ البيانات الأصلية
         
         if (data.profileImage) {
           setProfileImage(data.profileImage);
+          setOriginalProfileImage(data.profileImage); // حفظ الصورة الأصلية
           setImagePreview(data.profileImage);
+        } else {
+          setProfileImage(null);
+          setOriginalProfileImage(null);
+          setImagePreview(null);
         }
       } else {
         console.log("No document found for this user");
@@ -68,6 +78,13 @@ const ProfilePage = () => {
     }
   };
 
+  // دالة للتحقق مما إذا كان هناك تغييرات
+  const hasChanges = () => {
+    const phoneChanged = profile.phone !== originalProfile.phone;
+    const imageChanged = profileImage !== originalProfileImage;
+    return phoneChanged || imageChanged;
+  };
+
   const handleSave = async () => {
     if (!user) {
       alert("You must be logged in");
@@ -76,13 +93,17 @@ const ProfilePage = () => {
 
     try {
       setLoading(true);
-      // ✅ استخدمي نفس collection "users"
       const docRef = doc(db, "users", user.uid);
       await updateDoc(docRef, {
         phone: profile.phone,
         profileImage: profileImage || null,
         updatedAt: new Date().toISOString()
       });
+      
+      // تحديث البيانات الأصلية بعد الحفظ
+      setOriginalProfile({ ...profile });
+      setOriginalProfileImage(profileImage);
+      
       alert("Profile updated successfully ✅");
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -94,7 +115,10 @@ const ProfilePage = () => {
 
   const handleCancel = async () => {
     if (user) {
-      await fetchProfile(user.uid);
+      // استعادة البيانات الأصلية
+      setProfile({ ...originalProfile });
+      setProfileImage(originalProfileImage);
+      setImagePreview(originalProfileImage);
       alert("Changes cancelled");
     }
   };
@@ -342,14 +366,17 @@ const ProfilePage = () => {
             </div>
           </div>
 
+          {/* الأزرار - Save Button يظهر فقط عند وجود تغييرات */}
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end', paddingTop: '24px', borderTop: '2px solid #f1f5f9' }}>
-            <button 
-              onClick={handleSave} 
-              style={{ padding: '12px 32px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '500', cursor: 'pointer' }}
-              disabled={loading}
-            >
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
+            {hasChanges() && (
+              <button 
+                onClick={handleSave} 
+                style={{ padding: '12px 32px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '500', cursor: 'pointer' }}
+                disabled={loading}
+              >
+                {loading ? 'Saving...' : 'Save Changes'}
+              </button>
+            )}
             <button 
               onClick={handleCancel} 
               style={{ padding: '12px 32px', background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '12px', fontWeight: '500', cursor: 'pointer' }}
