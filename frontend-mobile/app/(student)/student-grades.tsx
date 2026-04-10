@@ -5,7 +5,6 @@ import { collection, query, where, getDocs, doc, getDoc } from "firebase/firesto
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-// 1. 
 interface Assessment {
   assessmentName: string;
   score: number;
@@ -18,9 +17,7 @@ interface CourseGrade {
   subject: string;
   final: number;
   midterm: number;
-  quiz1: number;
-  quiz2: number;
-  quiz3: number;
+  practical: number;
   total: number;
   status: string;
 }
@@ -58,24 +55,31 @@ export default function StudentGrades() {
           );
 
           const assessments = gradeSnap.docs.map(d => d.data() as Assessment);
-          
-          // 
-          const getS = (name: string) => assessments.find(a => a.assessmentName?.toLowerCase().includes(name))?.score || 0;
 
-          const finalG = getS("final");
-          const midG = getS("mid");
-          const q1 = assessments.find(a => ["quiz 1", "quiz1"].some(s => a.assessmentName?.toLowerCase().includes(s)))?.score || 0;
-          const q2 = assessments.find(a => ["quiz 2", "quiz2"].some(s => a.assessmentName?.toLowerCase().includes(s)))?.score || 0;
-          const q3 = assessments.find(a => ["quiz 3", "quiz3"].some(s => a.assessmentName?.toLowerCase().includes(s)))?.score || 0;
-          
-          const total = finalG + midG + q1 + q2 + q3;
+          // Match exact assessmentName values used by instructor: "Midterm", "Final", "Practical"
+          const getScore = (name: string) =>
+            assessments.find(a => a.assessmentName === name)?.score || 0;
 
-          let status = total >= 85 ? "Excellent" : total >= 75 ? "Very Good" : total >= 65 ? "Good" : total >= 60 ? "Pass" : "Fail";
+          const midterm = getScore("Midterm");
+          const finalG = getScore("Final");
+          const practical = getScore("Practical");
+
+          // Total = Midterm (10) + Final (60) + Practical (30) = 100
+          const total = midterm + finalG + practical;
+
+          const status =
+            total >= 85 ? "Excellent" :
+            total >= 75 ? "Very Good" :
+            total >= 65 ? "Good" :
+            total >= 60 ? "Pass" : "Fail";
 
           list.push({
             id: cId,
             subject: cDoc.data().name || cDoc.data().courseName || "Unknown Subject",
-            final: finalG, midterm: midG, quiz1: q1, quiz2: q2, quiz3: q3, total,
+            midterm,
+            final: finalG,
+            practical,
+            total,
             status,
           });
         }
@@ -100,10 +104,10 @@ export default function StudentGrades() {
     load();
   }, []);
 
-  const getStatusColor = (s: string) => 
+  const getStatusColor = (s: string) =>
     ({ Excellent: "#22c55e", "Very Good": "#3b82f6", Good: "#f59e0b", Pass: "#64748b", Fail: "#ef4444" }[s] || "#94a3b8");
-  
-  const getStatusBg = (s: string) => 
+
+  const getStatusBg = (s: string) =>
     ({ Excellent: "#dcfce7", "Very Good": "#dbeafe", Good: "#fef9c3", Pass: "#f1f5f9", Fail: "#fee2e2" }[s] || "#f1f5f9");
 
   if (loading) return <View style={s.center}><ActivityIndicator size="large" color="#1a3a8a" /></View>;
@@ -126,10 +130,11 @@ export default function StudentGrades() {
           <GradeStat label="Passed" value={`${stats.passed}/${stats.total}`} icon="🎯" bg="#dcfce7" />
         </View>
 
+        {/* Grading System Legend - updated to match instructor schema */}
         <View style={s.legendBox}>
           <Text style={s.legendTitle}>📝 Grading System</Text>
           <View style={s.legendRow}>
-            {[["Final","60"],["Mid","10"],["Quiz×3","30"],["Total","100"]].map(([l,v])=>(
+            {[["Final", "60"], ["Midterm", "10"], ["Practical", "30"], ["Total", "100"]].map(([l, v]) => (
               <View key={l} style={s.legendItem}>
                 <Text style={s.legendVal}>{v}</Text>
                 <Text style={s.legendLabel}>{l}</Text>
@@ -151,14 +156,15 @@ export default function StudentGrades() {
               {[
                 { lbl: "Final", score: g.final, max: 60 },
                 { lbl: "Midterm", score: g.midterm, max: 10 },
-                { lbl: "Quiz 1", score: g.quiz1, max: 10 },
-                { lbl: "Quiz 2", score: g.quiz2, max: 10 },
-                { lbl: "Quiz 3", score: g.quiz3, max: 10 }
+                { lbl: "Practical", score: g.practical, max: 30 },
               ].map((item) => (
                 <View key={item.lbl} style={s.breakdownRow}>
                   <Text style={s.breakdownLabel}>{item.lbl}</Text>
                   <View style={s.progressBar}>
-                    <View style={[s.progressFill, { width: `${(item.score/item.max)*100}%`, backgroundColor: getStatusColor(g.status) }]} />
+                    <View style={[s.progressFill, {
+                      width: item.max > 0 ? `${(item.score / item.max) * 100}%` : "0%",
+                      backgroundColor: getStatusColor(g.status)
+                    }]} />
                   </View>
                   <Text style={s.breakdownScore}>{item.score}/{item.max}</Text>
                 </View>
@@ -217,10 +223,10 @@ const s = StyleSheet.create({
   statusTxt: { fontSize: 12, fontWeight: "bold" },
   gradeBreakdown: { gap: 8, marginBottom: 14 },
   breakdownRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  breakdownLabel: { width: 55, fontSize: 12, color: "#64748b" },
+  breakdownLabel: { width: 65, fontSize: 12, color: "#64748b" },
   progressBar: { flex: 1, height: 6, backgroundColor: "#f1f5f9", borderRadius: 10, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 10 },
-  breakdownScore: { width: 40, fontSize: 12, fontWeight: "600", color: "#1e293b", textAlign: "right" },
+  breakdownScore: { width: 45, fontSize: 12, fontWeight: "600", color: "#1e293b", textAlign: "right" },
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: "#f1f5f9", paddingTop: 12 },
   totalLabel: { fontSize: 14, fontWeight: "bold", color: "#1e293b" },
   totalValue: { fontSize: 22, fontWeight: "bold" },

@@ -6,7 +6,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 
-// 
 interface Course {
   id: string;
   name: string;
@@ -34,14 +33,12 @@ interface ActiveSession {
     latitude: number;
     longitude: number;
   };
-  [key: string]: any; // للسماح بالحقول الأخرى من Firebase
+  [key: string]: any;
 }
 
 export default function CourseDetailsScreen() {
   const router = useRouter();
   const { courseId } = useLocalSearchParams();
-  
-  // تحويل courseId لنص صريح لحل مشكلة Firebase doc()
   const idStr = Array.isArray(courseId) ? courseId[0] : courseId;
 
   const [loading, setLoading] = useState(true);
@@ -59,7 +56,6 @@ export default function CourseDetailsScreen() {
       if (!user || !idStr) return;
 
       try {
-        // حل مشكلة doc(db, "courses", idStr)
         const cDoc = await getDoc(doc(db, "courses", idStr));
         if (cDoc.exists()) {
           const d = cDoc.data();
@@ -68,21 +64,19 @@ export default function CourseDetailsScreen() {
             const iDoc = await getDoc(doc(db, "users", d.instructorIds[0]));
             if (iDoc.exists()) instructorName = "Dr. " + iDoc.data().fullName;
           }
-          setCourse({ 
-            id: cDoc.id, 
-            name: d.name || d.courseName, 
-            code: d.code || "", 
-            instructor: instructorName, 
-            hours: d.creditHours || d.hours || "" 
+          setCourse({
+            id: cDoc.id,
+            name: d.name || d.courseName,
+            code: d.code || "",
+            instructor: instructorName,
+            hours: d.creditHours || d.hours || ""
           });
         }
 
-        // sessions
         const sessSnap = await getDocs(query(collection(db, "lecture_sessions"), where("courseId", "==", idStr)));
         const activeSess = sessSnap.docs.find(d => d.data().status === "active" && d.data().attendanceOpen);
         if (activeSess) setActiveSession({ id: activeSess.id, ...activeSess.data() });
 
-        // attendance
         const attendSnap = await getDocs(query(collection(db, "attendance"), where("studentId", "==", user.uid), where("courseId", "==", idStr)));
         const attendedIds = new Set(attendSnap.docs.map(d => d.data().sessionId));
         setPresent(attendedIds.size);
@@ -97,9 +91,17 @@ export default function CourseDetailsScreen() {
           }));
         setLectures(lecList);
 
-        // grades
-        const gradeSnap = await getDocs(query(collection(db, "grades"), where("studentId", "==", user.uid), where("courseId", "==", idStr)));
-        setGrades(gradeSnap.docs.map(d => ({ id: d.id, assessmentName: d.data().assessmentName, score: d.data().score })));
+        // Fetch grades - matches instructor's assessmentName: "Midterm", "Final", "Practical"
+        const gradeSnap = await getDocs(query(
+          collection(db, "grades"),
+          where("studentId", "==", user.uid),
+          where("courseId", "==", idStr)
+        ));
+        setGrades(gradeSnap.docs.map(d => ({
+          id: d.id,
+          assessmentName: d.data().assessmentName,
+          score: d.data().score
+        })));
 
       } catch (err) {
         console.error(err);
@@ -147,7 +149,6 @@ export default function CourseDetailsScreen() {
     }
   };
 
-  // إضافة أنواع (Types) لبارامترات المسافة
   const getDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
     const R = 6371000;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -160,6 +161,10 @@ export default function CourseDetailsScreen() {
   const absences = totalSessions - present;
   const absPercent = totalSessions > 0 ? ((absences / totalSessions) * 100).toFixed(1) : "0";
 
+  // Helper to get score by exact assessmentName (matches instructor's save logic)
+  const getGradeScore = (name: string) =>
+    grades.find(g => g.assessmentName === name)?.score ?? "—";
+
   if (loading) return <View style={s.center}><ActivityIndicator size="large" color="#1a3a8a" /></View>;
   if (!course) return <View style={s.center}><Text>Course not found</Text></View>;
 
@@ -167,7 +172,9 @@ export default function CourseDetailsScreen() {
     <SafeAreaView style={s.container}>
       <StatusBar barStyle="dark-content" />
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}><Ionicons name="arrow-back" size={24} color="#1a3a8a" /></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#1a3a8a" />
+        </TouchableOpacity>
         <View style={{ alignItems: "center" }}>
           <Text style={s.headerTitle}>Course Details</Text>
           {course.code ? <Text style={s.subtitle}>{course.code}</Text> : null}
@@ -210,15 +217,39 @@ export default function CourseDetailsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Grades section - updated to Midterm / Final / Practical */}
         {grades.length > 0 && (
           <View style={s.gradesSection}>
             <Text style={s.sectionTitle}>📊 My Grades</Text>
-            {grades.map(g => (
-              <View key={g.id} style={s.gradeRow}>
-                <Text style={s.gradeName}>{g.assessmentName}</Text>
-                <Text style={s.gradeScore}>{g.score} pts</Text>
-              </View>
-            ))}
+
+            {/* Grade breakdown rows matching instructor's categories */}
+            {[
+              { label: "Midterm", max: 10 },
+              { label: "Final", max: 60 },
+              { label: "Practical", max: 30 },
+            ].map(({ label, max }) => {
+              const score = getGradeScore(label);
+              const hasScore = score !== "—";
+              return (
+                <View key={label} style={s.gradeRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.gradeName}>{label}</Text>
+                    <Text style={s.gradeMax}>out of {max} pts</Text>
+                  </View>
+                  <Text style={[s.gradeScore, !hasScore && { color: "#94a3b8" }]}>
+                    {hasScore ? `${score} pts` : "Not graded"}
+                  </Text>
+                </View>
+              );
+            })}
+
+            {/* Total */}
+            <View style={[s.gradeRow, s.totalRow]}>
+              <Text style={s.totalLabel}>Total</Text>
+              <Text style={s.totalScore}>
+                {grades.reduce((sum, g) => sum + (Number(g.score) || 0), 0)} / 100 pts
+              </Text>
+            </View>
           </View>
         )}
 
@@ -240,7 +271,6 @@ export default function CourseDetailsScreen() {
   );
 }
 
-// إضافة Types للـ Props الخاصة بـ StatBox
 const StatBox = ({ label, value, icon, color }: { label: string, value: string | number, icon: any, color: string }) => (
   <View style={[s.statBox, { borderTopColor: color, borderTopWidth: 3 }]}>
     <Ionicons name={icon} size={18} color={color} />
@@ -274,9 +304,13 @@ const s = StyleSheet.create({
   attendBtnOff: { backgroundColor: "#94a3b8" },
   attendBtnTxt: { color: "#fff", fontWeight: "bold", fontSize: 14 },
   gradesSection: { backgroundColor: "#fff", borderRadius: 18, padding: 18, marginBottom: 20, elevation: 1 },
-  gradeRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" },
+  gradeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" },
   gradeName: { fontSize: 14, fontWeight: "600", color: "#1e293b" },
-  gradeScore: { fontSize: 14, fontWeight: "bold", color: "#22c55e" },
+  gradeMax: { fontSize: 11, color: "#94a3b8", marginTop: 2 },
+  gradeScore: { fontSize: 15, fontWeight: "bold", color: "#22c55e" },
+  totalRow: { borderBottomWidth: 0, marginTop: 4 },
+  totalLabel: { fontSize: 14, fontWeight: "bold", color: "#1e293b" },
+  totalScore: { fontSize: 16, fontWeight: "bold", color: "#1a3a8a" },
   lectureRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#fff", borderRadius: 14, padding: 14, marginBottom: 10, elevation: 1 },
   lecturePresent: { borderLeftWidth: 4, borderLeftColor: "#22c55e" },
   lectureDate: { fontSize: 14, fontWeight: "600", color: "#1e293b" },
