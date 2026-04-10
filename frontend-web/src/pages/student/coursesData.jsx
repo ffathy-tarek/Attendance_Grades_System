@@ -3,15 +3,14 @@ import { db } from '../../firebase';
 
 // الدوال المساعدة
 const getStatusFromGrade = (total) => {
-  if (total >= 90) return "Excellent";
-  if (total >= 80) return "Very Good";
-  if (total >= 70) return "Good";
-  if (total >= 60) return "Pass";
+  if (total >= 85) return "Excellent";
+  if (total >= 75) return "Very Good";
+  if (total >= 65) return "Good";
+  if (total >= 60) return "Fair";
   return "Fail";
 };
 
 /**
- * جلب أسماء المدرسين من مجموعة users باستخدام instructorIds
  */
 const getInstructorNames = async (instructorIds) => {
   try {
@@ -42,7 +41,7 @@ const getInstructorNames = async (instructorIds) => {
 };
 
 /**
- * جلب اسم مدرس واحد من مجموعة users
+ *  اسم مدرس واحد من مجموعة users
  */
 const getInstructorName = async (instructorId) => {
   try {
@@ -243,13 +242,12 @@ export const openMapToLocation = (lat, lng) => {
 // ==================== دوال الحضور الأساسية ====================
 
 /**
- * جلب بيانات الحضور لطالب معين
+ *  بيانات الحضور لطالب معين
  */
 export const getAttendanceData = async (studentId) => {
   try {
     if (!studentId) return [];
 
-    // جلب كل تسجيلات الحضور للطالب (يجب أن يكون status = present)
     const attendanceRef = collection(db, 'attendance');
     const attendanceQuery = query(
       attendanceRef,
@@ -266,7 +264,7 @@ export const getAttendanceData = async (studentId) => {
       presentByCourse[courseId] = (presentByCourse[courseId] || 0) + 1;
     });
 
-    // جلب المواد المسجل فيها الطالب
+    //  المواد المسجل فيها الطالب
     const enrollmentsRef = collection(db, 'enrollments');
     const enrollmentsQuery = query(
       enrollmentsRef,
@@ -332,7 +330,6 @@ export const getAttendanceData = async (studentId) => {
 };
 
 /**
- * جلب بيانات الحضور لـ Dashboard
  */
 export const getCoursesForDashboard = async (studentId) => {
   const data = await getAttendanceData(studentId);
@@ -346,7 +343,6 @@ export const getCoursesForDashboard = async (studentId) => {
 };
 
 /**
- * جلب بيانات صفحة المواد
  */
 export const getCoursesForCoursesPage = async (studentId) => {
   const data = await getAttendanceData(studentId);
@@ -361,7 +357,6 @@ export const getCoursesForCoursesPage = async (studentId) => {
 };
 
 /**
- * جلب الإحصائيات الكاملة
  */
 export const getTotalStats = async (studentId) => {
   const data = await getAttendanceData(studentId);
@@ -394,17 +389,25 @@ export const getTotalStats = async (studentId) => {
   let gradesCount = 0;
   
   for (const course of data) {
-    const courseRef = doc(db, 'courses', course.id);
-    const courseSnap = await getDoc(courseRef);
-    if (courseSnap.exists()) {
-      const grades = courseSnap.data().grades;
-      if (grades) {
-        const total = (grades.final || 0) + (grades.midterm || 0) + 
-                      (grades.quiz1 || 0) + (grades.quiz2 || 0) + (grades.quiz3 || 0);
-        totalGrades += total;
-        gradesCount++;
-      }
-    }
+    const gradesRef = collection(db, 'grades');
+    const gradesQuery = query(
+      gradesRef,
+      where('studentId', '==', studentId),
+      where('courseId', '==', course.id)
+    );
+    const gradesSnapshot = await getDocs(gradesQuery);
+    
+    let final = 0, midterm = 0, practical = 0;
+    gradesSnapshot.forEach((doc) => {
+      const gradeData = doc.data();
+      if (gradeData.assessmentName === 'Final') final = gradeData.score || 0;
+      if (gradeData.assessmentName === 'Midterm') midterm = gradeData.score || 0;
+      if (gradeData.assessmentName === 'Practical') practical = gradeData.score || 0;
+    });
+    
+    const total = final + midterm + practical;
+    totalGrades += total;
+    gradesCount++;
   }
   
   const averageGrade = gradesCount > 0 ? (totalGrades / gradesCount).toFixed(1) : 0;
@@ -422,7 +425,7 @@ export const getTotalStats = async (studentId) => {
 };
 
 /**
- * جلب مادة محددة مع تفاصيل المحاضرات
+ *  مادة محددة مع تفاصيل المحاضرات
  */
 export const getCourseById = async (courseId, studentId) => {
   try {
@@ -479,6 +482,24 @@ export const getCourseById = async (courseId, studentId) => {
     const attendedLectures = lectures.filter(l => l.attended).length;
     const attendanceRate = totalLectures > 0 ? (attendedLectures / totalLectures) * 100 : 0;
     
+    let grades = { final: 0, midterm: 0, practical: 0 };
+    if (studentId) {
+      const gradesRef = collection(db, 'grades');
+      const gradesQuery = query(
+        gradesRef,
+        where('studentId', '==', studentId),
+        where('courseId', '==', courseId)
+      );
+      const gradesSnapshot = await getDocs(gradesQuery);
+      
+      gradesSnapshot.forEach((doc) => {
+        const gradeData = doc.data();
+        if (gradeData.assessmentName === 'Final') grades.final = gradeData.score || 0;
+        if (gradeData.assessmentName === 'Midterm') grades.midterm = gradeData.score || 0;
+        if (gradeData.assessmentName === 'Practical') grades.practical = gradeData.score || 0;
+      });
+    }
+    
     return {
       id: courseSnap.id,
       name: courseData.name,
@@ -490,13 +511,7 @@ export const getCourseById = async (courseId, studentId) => {
       attendance: attendanceRate,
       present: attendedLectures,
       total: totalLectures,
-      grades: courseData.grades || {
-        final: 0,
-        midterm: 0,
-        quiz1: 0,
-        quiz2: 0,
-        quiz3: 0,
-      }
+      grades: grades
     };
     
   } catch (error) {
@@ -506,32 +521,28 @@ export const getCourseById = async (courseId, studentId) => {
 };
 
 /**
- * جلب تفاصيل درجة مادة محددة
+ *  تفاصيل درجة مادة محددة
  */
 export const getGradeDetails = async (studentId, courseId) => {
   try {
     const course = await getCourseById(courseId, studentId);
     if (!course) return null;
     
-    const total = course.grades.final + 
-                  course.grades.midterm + 
-                  course.grades.quiz1 + 
-                  course.grades.quiz2 + 
-                  course.grades.quiz3;
+    const total = (course.grades.final || 0) + 
+                  (course.grades.midterm || 0) + 
+                  (course.grades.practical || 0);
     
     return {
       id: course.id,
       subject: course.name,
       code: course.code,
-      final: course.grades.final,
-      midterm: course.grades.midterm,
-      quiz1: course.grades.quiz1,
-      quiz2: course.grades.quiz2,
-      quiz3: course.grades.quiz3,
+      final: course.grades.final || 0,
+      midterm: course.grades.midterm || 0,
+      practical: course.grades.practical || 0,
       total: total,
       maxFinal: 60,
       maxMidterm: 10,
-      maxQuiz: 10,
+      maxPractical: 30,
       status: getStatusFromGrade(total),
     };
   } catch (error) {
@@ -541,7 +552,7 @@ export const getGradeDetails = async (studentId, courseId) => {
 };
 
 /**
- * جلب بيانات الدرجات لطالب معين
+ *  بيانات الدرجات لطالب معين
  */
 export const getGradesData = async (studentId) => {
   try {
@@ -549,28 +560,36 @@ export const getGradesData = async (studentId) => {
     const gradesList = [];
     
     for (const course of attendanceData) {
-      const courseRef = doc(db, 'courses', course.id);
-      const courseSnap = await getDoc(courseRef);
+      // ✅ تعديل: جلب الدرجات من collection grades
+      const gradesRef = collection(db, 'grades');
+      const gradesQuery = query(
+        gradesRef,
+        where('studentId', '==', studentId),
+        where('courseId', '==', course.id)
+      );
+      const gradesSnapshot = await getDocs(gradesQuery);
       
-      if (courseSnap.exists()) {
-        const grades = courseSnap.data().grades || {};
-        const total = (grades.final || 0) + (grades.midterm || 0) + 
-                      (grades.quiz1 || 0) + (grades.quiz2 || 0) + (grades.quiz3 || 0);
-        
-        gradesList.push({
-          id: course.id,
-          subject: course.subject,
-          code: course.code,
-          final: grades.final || 0,
-          midterm: grades.midterm || 0,
-          quiz1: grades.quiz1 || 0,
-          quiz2: grades.quiz2 || 0,
-          quiz3: grades.quiz3 || 0,
-          total: total,
-          percentage: `${total}%`,
-          status: getStatusFromGrade(total),
-        });
-      }
+      let final = 0, midterm = 0, practical = 0;
+      gradesSnapshot.forEach((doc) => {
+        const gradeData = doc.data();
+        if (gradeData.assessmentName === 'Final') final = gradeData.score || 0;
+        if (gradeData.assessmentName === 'Midterm') midterm = gradeData.score || 0;
+        if (gradeData.assessmentName === 'Practical') practical = gradeData.score || 0;
+      });
+      
+      const total = final + midterm + practical;
+      
+      gradesList.push({
+        id: course.id,
+        subject: course.subject,
+        code: course.code,
+        final: final,
+        midterm: midterm,
+        practical: practical,
+        total: total,
+        percentage: `${total}%`,
+        status: getStatusFromGrade(total),
+      });
     }
     
     return gradesList;
@@ -581,7 +600,7 @@ export const getGradesData = async (studentId) => {
 };
 
 /**
- * جلب إحصائيات الدرجات
+ *   تفاصيل  الدرجات
  */
 export const getGradesStats = async (studentId) => {
   const grades = await getGradesData(studentId);
@@ -600,17 +619,17 @@ export const getGradesStats = async (studentId) => {
     };
   }
   
-  const percentages = grades.map(g => g.total);
+  const totals = grades.map(g => g.total);
   
   return {
-    highest: Math.max(...percentages),
-    lowest: Math.min(...percentages),
-    average: (percentages.reduce((a, b) => a + b, 0) / percentages.length).toFixed(1),
+    highest: Math.max(...totals),
+    lowest: Math.min(...totals),
+    average: (totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(1),
     passed: grades.filter(g => g.total >= 60).length,
-    excellent: grades.filter(g => g.total >= 90).length,
-    veryGood: grades.filter(g => g.total >= 80 && g.total < 90).length,
-    good: grades.filter(g => g.total >= 70 && g.total < 80).length,
-    pass: grades.filter(g => g.total >= 60 && g.total < 70).length,
+    excellent: grades.filter(g => g.total >= 85).length,
+    veryGood: grades.filter(g => g.total >= 75 && g.total < 85).length,
+    good: grades.filter(g => g.total >= 65 && g.total < 75).length,
+    Fair: grades.filter(g => g.total >= 60 && g.total < 65).length,
     fail: grades.filter(g => g.total < 60).length,
   };
 };
@@ -641,7 +660,7 @@ export const checkActiveSession = async (courseId) => {
   }
 };
 
-// ✅ استخدام ID مخصص للتحقق (sessionId_studentId)
+//  استخدام ID مخصص للتحقق (sessionId_studentId)
 export const checkExistingAttendance = async (sessionId, studentId) => {
   try {
     const customId = `${sessionId}_${studentId}`;
@@ -669,7 +688,7 @@ export const checkEnrollment = async (studentId, courseId) => {
   }
 };
 
-// ✅ دالة تسجيل الحضور للطالب (مع موقع)
+//  دالة تسجيل الحضور للطالب (مع موقع)
 export const markStudentPresent = async (studentId, courseId, sessionId, studentLocation, distance) => {
   try {
     const customId = `${sessionId}_${studentId}`;
@@ -690,7 +709,7 @@ export const markStudentPresent = async (studentId, courseId, sessionId, student
   }
 };
 
-// ✅ دالة تسجيل الحضور للدكتور (يدوياً) - مع إضافة status
+//  دالة تسجيل الحضور للدكتور (يدوياً) - مع إضافة status
 export const markStudentPresentByDoctor = async (studentId, courseId, sessionId) => {
   try {
     const customId = `${sessionId}_${studentId}`;
@@ -713,14 +732,14 @@ export const markStudentPresentByDoctor = async (studentId, courseId, sessionId)
   }
 };
 
-// ✅ دالة متكاملة لتسجيل الحضور للطالب
+// تسجيل الحضور للطالب
 export const takeAttendance = async (studentId, courseId) => {
   try {
     const activeSession = await checkActiveSession(courseId);
     if (!activeSession) {
       return { 
         success: false, 
-        message: '⚠️ No Session Exists in this time' 
+        message: '⚠️ No Session Exists At this time' 
       };
     }
 
@@ -752,7 +771,7 @@ export const takeAttendance = async (studentId, courseId) => {
     if (!studentLocation) {
       return { 
         success: false, 
-        message: `📍 ${locationError || 'لا يمكن الحصول على موقعك الحالي. تأكد من تشغيل خدمات الموقع.'}`,
+        message: `📍 ${locationError || 'Approve Location Access.'}`,
         requiresLocation: true
       };
     }
@@ -778,7 +797,7 @@ export const takeAttendance = async (studentId, courseId) => {
     );
     
     if (result.success) {
-      result.message = `✅ تم تسجيل الحضور بنجاح (المسافة: ${proximityCheck.distance || 'غير محسوبة'} متر)`;
+      result.message = `✅ Done  (Distance: ${proximityCheck.distance || 'غير محسوبة'} متر)`;
     }
     
     return result;
@@ -787,7 +806,7 @@ export const takeAttendance = async (studentId, courseId) => {
     console.error('Error in takeAttendance:', error);
     return { 
       success: false, 
-      message: '❌ حدث خطأ أثناء تسجيل الحضور، حاول مرة أخرى' 
+      message: '❌ Please Try Again' 
     };
   }
 };
