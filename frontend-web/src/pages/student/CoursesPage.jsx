@@ -40,7 +40,7 @@ const CoursesPage = () => {
     return (
       <PageLayout title="My Courses" subtitle="Check your enrolled courses">
         <div style={{ textAlign: 'center', padding: '50px' }}>
-          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading...</div>
         </div>
       </PageLayout>
     );
@@ -92,7 +92,7 @@ const CoursesPage = () => {
           ))
         ) : (
           <div style={{ textAlign: 'center', padding: '40px', color: '#64748b', gridColumn: '1/-1' }}>
-            لا توجد مواد مسجلة
+            No courses
           </div>
         )}
       </div>
