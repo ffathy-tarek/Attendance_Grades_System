@@ -133,7 +133,7 @@ const CourseDetails = () => {
   const handleLocationDenied = () => {
     setShowLocationPermission(false);
     setAttendanceMessage({
-      text: '⚠️ لم يتم تسجيل الحضور لأنك لم تسمح بالوصول إلى الموقع',
+      text: '⚠️ Approve Location Access And try Again',
       type: 'error'
     });
     setAttendanceLoading(false);
@@ -147,7 +147,7 @@ const CourseDetails = () => {
     return (
       <PageLayout>
         <div style={{ textAlign: 'center', padding: '50px' }}>
-          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading...</div>
         </div>
       </PageLayout>
     );
@@ -170,8 +170,8 @@ const CourseDetails = () => {
 
   const finalScore = course.grades?.final || 0;
   const midtermScore = course.grades?.midterm || 0;
-  const quizzesScore = (course.grades?.quiz1 || 0) + (course.grades?.quiz2 || 0) + (course.grades?.quiz3 || 0);
-  const totalGrade = ((finalScore + midtermScore + quizzesScore) / 100) * 100;
+  const practicalScore = course.grades?.practical || 0;
+  const totalGrade = finalScore + midtermScore + practicalScore;
 
   return (
     <PageLayout>
@@ -223,14 +223,14 @@ const CourseDetails = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>
-              📝 تسجيل الحضور
+              📝 Take Attendence
             </h3>
             <p style={{ fontSize: '14px', color: '#64748b' }}>
               {activeSession 
                 ? activeSession.attendanceOpen !== false
-                  ? '🟢 توجد جلسة مفتوحة حالياً - يمكنك تسجيل حضورك'
-                  : '🔴 الدكتور أغلق باب التسجيل لهذه الجلسة'
-                : '🔴 لا توجد جلسة مفتوحة حالياً - لا يمكن تسجيل الحضور'}
+                  ? '🟢 There Exist Session Right Now - You Can Take Attendence'
+                  : '🔴 The instructor Closed The Attendence'
+                : '🔴 No Session Right Now'}
             </p>
           </div>
           
@@ -247,10 +247,10 @@ const CourseDetails = () => {
               fontSize: '16px',
               cursor: (activeSession && activeSession.attendanceOpen !== false && !attendanceLoading) ? 'pointer' : 'not-allowed',
               opacity: attendanceLoading ? 0.7 : 1,
-              transition: 'all 0.2s'
+              transitioتسn: 'all 0.2s'
             }}
           >
-            {attendanceLoading ? 'جاري التسجيل...' : '📝 تسجيل الحضور'}
+            {attendanceLoading ? 'Please Wait..' : '📝 Take Attendence'}
           </button>
         </div>
         
@@ -266,10 +266,10 @@ const CourseDetails = () => {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <span>📍</span>
-              <span style={{ fontWeight: '500' }}>موقع الجلسة:</span>
+              <span style={{ fontWeight: '500' }}>Session Loaction:</span>
             </div>
             <div style={{ marginLeft: '28px' }}>
-              <div>يجب أن تكون داخل نطاق {activeSession.allowedDistance || 100} متر من موقع الدكتور لتسجيل الحضور</div>
+              <div>You Have to be in instructor Range{activeSession.allowedDistance || 100} Meter From instructor To take Attendence</div>
               <button
                 onClick={() => openMapToLocation(
                   activeSession.instructorLocation.latitude, 
@@ -289,7 +289,7 @@ const CourseDetails = () => {
                   gap: '6px'
                 }}
               >
-                <span>🗺️</span> عرض موقع الدكتور على الخريطة
+                <span>🗺️</span> Show instructor Location
               </button>
             </div>
           </div>
@@ -327,7 +327,7 @@ const CourseDetails = () => {
                   gap: '6px'
                 }}
               >
-                <span>🗺️</span> عرض موقع الدكتور على الخريطة
+                <span>🗺️</span> Show instructor Location
               </button>
             )}
           </div>
@@ -385,27 +385,11 @@ const CourseDetails = () => {
           />
 
           <GradeCard 
-            title="Quiz 1"
-            score={course.grades?.quiz1 || 0}
-            maxScore={10}
+            title="Practical"
+            score={practicalScore}
+            maxScore={30}
             color="#059669"
-            icon="📝"
-          />
-
-          <GradeCard 
-            title="Quiz 2"
-            score={course.grades?.quiz2 || 0}
-            maxScore={10}
-            color="#d97706"
-            icon="📝"
-          />
-
-          <GradeCard 
-            title="Quiz 3"
-            score={course.grades?.quiz3 || 0}
-            maxScore={10}
-            color="#dc2626"
-            icon="📝"
+            icon="🔧"
           />
 
           <div className={styles.courseCard} style={{ padding: '20px', borderTop: '4px solid #0f172a', gridColumn: 'span 2' }}>
@@ -417,7 +401,7 @@ const CourseDetails = () => {
               <span style={{ fontSize: '36px', fontWeight: 700, color: '#2563eb' }}>{totalGrade.toFixed(1)}%</span>
             </div>
             <p style={{ color: '#64748b', marginTop: '8px', fontSize: '14px' }}>
-              Final: {finalScore}/60 + Midterm: {midtermScore}/10 + Quizzes: {quizzesScore}/30
+              Final: {finalScore}/60 + Midterm: {midtermScore}/10 + Practical: {practicalScore}/30
             </p>
           </div>
         </div>
@@ -508,7 +492,7 @@ const CourseDetails = () => {
                 fontSize: '11px',
                 color: '#92400e'
               }}>
-                🔒 تم إغلاق باب التسجيل لهذه المحاضرة
+                🔒 Session Closed
               </div>
             )}
           </div>
