@@ -82,7 +82,7 @@ const GradesPage = () => {
     return (
       <PageLayout title="Grades" subtitle="View your grades and performance">
         <div style={{ textAlign: 'center', padding: '50px' }}>
-          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading...</div>
         </div>
       </PageLayout>
     );
@@ -113,9 +113,7 @@ const GradesPage = () => {
               <th>Subject</th>
               <th>Final (60)</th>
               <th>Midterm (10)</th>
-              <th>Quiz 1 (10)</th>
-              <th>Quiz 2 (10)</th>
-              <th>Quiz 3 (10)</th>
+              <th>Practical (30)</th>
               <th>Total</th>
               <th>Percentage</th>
               <th>Status</th>
@@ -128,9 +126,7 @@ const GradesPage = () => {
                   <td style={{ fontWeight: '500' }}>{g.subject}</td>
                   <td style={{ fontWeight: '600', color: '#0f172a' }}>{g.final}</td>
                   <td>{g.midterm}</td>
-                  <td>{g.quiz1}</td>
-                  <td>{g.quiz2}</td>
-                  <td>{g.quiz3}</td>
+                  <td>{g.practical}</td>
                   <td style={{ fontWeight: '700', color: '#2563eb' }}>{g.total}</td>
                   <td>
                     <span style={{ 
@@ -160,7 +156,7 @@ const GradesPage = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
                   No grades available
                 </td>
               </tr>
@@ -270,9 +266,7 @@ const GradesPage = () => {
               <div style={{ display: 'flex', gap: '16px', color: '#475569', fontSize: '14px' }}>
                 <span>📚 Final: 60</span>
                 <span>📖 Midterm: 10</span>
-                <span>📝 Quiz 1: 10</span>
-                <span>📝 Quiz 2: 10</span>
-                <span>📝 Quiz 3: 10</span>
+                <span>🔧 Practical: 30</span>
                 <span style={{ fontWeight: '600', color: '#2563eb' }}>Total: 100</span>
               </div>
             </div>
