@@ -14,6 +14,7 @@ import {
   orderBy,
   Timestamp,
   getDoc,
+  GeoPoint, 
 } from "firebase/firestore";
 import PageLayout from "../../components/student/PageLayout";
 import styles from "../../components/student/PageLayout.module.css";
@@ -29,15 +30,48 @@ const Lectures = () => {
   const [activeSession, setActiveSession] = useState(null);
   const [isQRVisible, setIsQRVisible] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState("1 hour");
+  const [startingSession, setStartingSession] = useState(false);
 
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [attendedStudents, setAttendedStudents] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
+  // 🔍 دالة لجلب الموقع كـ GeoPoint
+  const getCurrentLocationAsGeoPoint = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation is not supported by your browser"));
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          
+         
+          const geoPoint = new GeoPoint(lat, lng);
+          
+          console.log("📍 GeoPoint created:", geoPoint);
+          console.log(`📍 Latitude: ${lat}, Longitude: ${lng}`);
+          resolve(geoPoint);
+        },
+        (error) => {
+          reject(error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    });
+  };
+
   useEffect(() => {
     if (!user) return;
 
-    // جلب المواد
+   
     const fetchCourses = async () => {
       try {
         const qC = query(
@@ -52,7 +86,7 @@ const Lectures = () => {
     };
     fetchCourses();
 
-    // متابعة جلسات المحاضرات
+   
     const qHistory = query(
       collection(db, "lecture_sessions"),
       where("instructorId", "==", user.uid),
@@ -89,12 +123,20 @@ const Lectures = () => {
   }, [user]);
 
   const startSession = async (course) => {
-    setLoading(true);
+    setStartingSession(true);
     try {
-      // موقع تقريبي للويب
-      const mockLocation = { latitude: 30.0444, longitude: 31.2357 };
+   
+      let instructorLocation = null;
+      try {
+        instructorLocation = await getCurrentLocationAsGeoPoint();
+        console.log("📍 GeoPoint to save:", instructorLocation);
+      } catch (locationError) {
+        console.warn("Could not get location:", locationError);
+      
+      }
 
-      await addDoc(collection(db, "lecture_sessions"), {
+    
+      const sessionData = {
         courseId: course.id,
         courseName: course.name || course.courseName,
         instructorId: user.uid,
@@ -102,15 +144,22 @@ const Lectures = () => {
         status: "active",
         attendanceOpen: false,
         durationMinutes: selectedDuration,
-        instructorLocation: mockLocation,
-      });
+      };
+
+      if (instructorLocation) {
+        sessionData.instructorLocation = instructorLocation;
+      }
+
+      const docRef = await addDoc(collection(db, "lecture_sessions"), sessionData);
+      console.log("✅ Session created with ID:", docRef.id);
+      
       setShowCoursePicker(false);
       setIsQRVisible(true);
     } catch (error) {
       console.error("Error starting session:", error);
       alert("Error starting session. Check connection.");
     }
-    setLoading(false);
+    setStartingSession(false);
   };
 
   const toggleAttendance = async (isOpen) => {
@@ -183,6 +232,16 @@ const Lectures = () => {
       console.error(error);
     }
     setDetailsLoading(false);
+  };
+
+
+  const formatGeoPoint = (geoPoint) => {
+    if (!geoPoint) return null;
+    const lat = geoPoint.latitude;
+    const lng = geoPoint.longitude;
+    const latDirection = lat >= 0 ? "N" : "S";
+    const lngDirection = lng >= 0 ? "E" : "W";
+    return `${Math.abs(lat).toFixed(6)}° ${latDirection}, ${Math.abs(lng).toFixed(6)}° ${lngDirection}`;
   };
 
   const formatDate = (timestamp) => {
@@ -327,6 +386,7 @@ const Lectures = () => {
               width: "90%",
               maxWidth: "500px",
               textAlign: "center",
+              position: "relative",
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -349,6 +409,13 @@ const Lectures = () => {
             <h3 style={{ fontSize: "24px", fontWeight: "bold", color: "#1a3a8a", marginBottom: "20px" }}>
               {activeSession.courseName}
             </h3>
+
+         
+            {activeSession.instructorLocation && (
+              <div style={{ marginBottom: "15px", fontSize: "12px", color: "#64748b", wordBreak: "break-all" }}>
+                📍 {formatGeoPoint(activeSession.instructorLocation)}
+              </div>
+            )}
 
             <div style={{ width: "100%", padding: "20px", background: "#f8fafc", borderRadius: "20px", marginBottom: "20px" }}>
               <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#64748b" }}>
@@ -501,6 +568,7 @@ const Lectures = () => {
               <button
                 key={course.id}
                 onClick={() => startSession(course)}
+                disabled={startingSession}
                 style={{
                   display: "block",
                   width: "100%",
@@ -510,7 +578,8 @@ const Lectures = () => {
                   border: "1px solid #e2e8f0",
                   borderRadius: "12px",
                   textAlign: "left",
-                  cursor: "pointer",
+                  cursor: startingSession ? "wait" : "pointer",
+                  opacity: startingSession ? 0.6 : 1,
                 }}
               >
                 <strong style={{ color: "#1a3a8a" }}>
