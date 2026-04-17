@@ -1,519 +1,263 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../firebase";
 import {
   collection,
-  doc,
-  getDocs,
-  addDoc,
-  updateDoc,
   query,
   where,
-  Timestamp,
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc,
   onSnapshot,
   getDoc,
-  arrayUnion,
-  arrayRemove,
+  serverTimestamp,
 } from "firebase/firestore";
 import PageLayout from "../../components/student/PageLayout";
 import styles from "../../components/student/PageLayout.module.css";
 
 const Attendance = () => {
-  const { subjectId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-
-  const [course, setCourse] = useState(null);
+  
+  const [loading, setLoading] = useState(true);
+  const [activeSession, setActiveSession] = useState(null);
   const [students, setStudents] = useState([]);
-  const [attendanceSession, setAttendanceSession] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(null);
-  const [duration, setDuration] = useState(10);
-  const [loading, setLoading] = useState(false);
-  const [attendees, setAttendees] = useState([]);
-  const [lectureSessions, setLectureSessions] = useState([]);
-  const [selectedLecture, setSelectedLecture] = useState(null);
-  const [coursesList, setCoursesList] = useState([]);
-  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [attendanceMap, setAttendanceMap] = useState({});
+  const [attendanceDetails, setAttendanceDetails] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // جلب المواد الخاصة بالمدرب لو مفيش subjectId
+  // جلب الجلسة النشطة
   useEffect(() => {
-    const fetchCourses = async () => {
-      if (subjectId) {
-        setLoadingCourses(false);
+    if (!user) return;
+
+    const qSession = query(
+      collection(db, "lecture_sessions"),
+      where("instructorId", "==", user.uid),
+      where("status", "==", "active"),
+    );
+
+    const unsubSession = onSnapshot(qSession, async (snap) => {
+      if (snap.empty) {
+        setActiveSession(null);
+        setLoading(false);
         return;
       }
-
-      try {
-        const q = query(
-          collection(db, "courses"),
-          where("instructorIds", "array-contains", user?.uid),
-        );
-        const coursesSnap = await getDocs(q);
-        const courses = await Promise.all(
-          coursesSnap.docs.map(async (doc) => {
-            const enrollmentsQuery = query(
-              collection(db, "enrollments"),
-              where("courseId", "==", doc.id),
-            );
-            const enrollmentsSnap = await getDocs(enrollmentsQuery);
-
-            return {
-              id: doc.id,
-              ...doc.data(),
-              studentsCount: enrollmentsSnap.size,
-            };
-          }),
-        );
-        setCoursesList(courses);
-      } catch (error) {
-        console.error("Error fetching courses:", error);
-      } finally {
-        setLoadingCourses(false);
-      }
-    };
-
-    fetchCourses();
-  }, [subjectId, user?.uid]);
-
-  // جلب بيانات المادة والطلاب
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!subjectId) return;
-
-      try {
-        const courseDoc = await getDoc(doc(db, "courses", subjectId));
-        if (courseDoc.exists()) {
-          setCourse({ id: courseDoc.id, ...courseDoc.data() });
-        } else {
-          console.log("Course not found");
-          return;
-        }
-
-        const enrollmentsQuery = query(
-          collection(db, "enrollments"),
-          where("courseId", "==", subjectId),
-        );
-        const enrollmentsSnap = await getDocs(enrollmentsQuery);
-
-        if (enrollmentsSnap.size > 0) {
-          const studentsList = [];
-          for (const enrollment of enrollmentsSnap.docs) {
-            const enrollmentData = enrollment.data();
-            const studentDoc = await getDoc(
-              doc(db, "users", enrollmentData.studentId),
-            );
-            if (studentDoc.exists()) {
-              studentsList.push({
-                id: studentDoc.id,
-                ...studentDoc.data(),
-                enrollmentId: enrollment.id,
-              });
-            }
-          }
-          setStudents(studentsList);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-
-    fetchData();
-  }, [subjectId]);
-
-  // جلب جلسات المحاضرات لهذه المادة
-  useEffect(() => {
-    if (!subjectId) return;
-
-    const q = query(
-      collection(db, "lecture_sessions"),
-      where("courseId", "==", subjectId),
-      where("status", "==", "active"),
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const lectures = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setLectureSessions(lectures);
-
-      if (lectures.length > 0 && !selectedLecture) {
-        setSelectedLecture(lectures[0]);
-      }
+      const sessionData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      setActiveSession(sessionData);
+      await fetchEnrolledStudents(sessionData);
     });
 
-    return () => unsubscribe();
-  }, [subjectId]);
+    return () => unsubSession();
+  }, [user]);
 
-  // الاستماع لجلسة الحضور النشطة
-  useEffect(() => {
-    if (!selectedLecture) return;
-
-    const q = query(
-      collection(db, "attendance"),
-      where("lectureId", "==", selectedLecture.id),
-      where("status", "==", "active"),
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const session = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-        setAttendanceSession(session);
-        setAttendees(session.attendees || []);
-
-        const endTime = session.endTime.toDate();
-        const now = new Date();
-        const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-        setTimeLeft(remaining);
-      } else {
-        setAttendanceSession(null);
-        setAttendees([]);
-        setTimeLeft(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [selectedLecture]);
-
-  // Timer
-  useEffect(() => {
-    if (!timeLeft || timeLeft <= 0) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft]);
-
-  const startAttendance = async () => {
-    if (!selectedLecture) {
-      alert("Please select a lecture session first");
-      return;
-    }
-
-    setLoading(true);
+  const fetchEnrolledStudents = async (session) => {
     try {
-      const endTime = new Date();
-      endTime.setMinutes(endTime.getMinutes() + duration);
+      const qEnroll = query(
+        collection(db, "enrollments"),
+        where("courseId", "==", session.courseId),
+      );
+      const enrollSnap = await getDocs(qEnroll);
 
-      const sessionData = {
-        courseId: subjectId,
-        lectureId: selectedLecture.id,
-        instructorId: user.uid,
-        startTime: Timestamp.now(),
-        endTime: Timestamp.fromDate(endTime),
-        duration,
-        status: "active",
-        attendees: [],
-      };
+      const studentList = [];
+      const studentIds = enrollSnap.docs.map((doc) => doc.data().studentId);
 
-      await addDoc(collection(db, "attendance"), sessionData);
+      for (const sId of studentIds) {
+        const uDoc = await getDoc(doc(db, "users", sId));
+        if (uDoc.exists()) {
+          studentList.push({
+            id: sId,
+            fullName: uDoc.data().fullName,
+            universityId: uDoc.data().universityId || uDoc.data().code || "N/A",
+          });
+        }
+      }
+      setStudents(studentList);
+
+      const qAttend = query(
+        collection(db, "attendance"),
+        where("sessionId", "==", session.id),
+      );
+
+      onSnapshot(qAttend, (aSnap) => {
+        const map = {};
+        const details = {};
+        aSnap.docs.forEach((d) => {
+          const data = d.data();
+          map[data.studentId] = d.id;
+          details[data.studentId] = {
+            time: data.timestamp?.toDate
+              ? data.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              : "...",
+            method: data.method || "auto"
+          };
+        });
+        setAttendanceMap(map);
+        setAttendanceDetails(details);
+        setLoading(false);
+      });
     } catch (error) {
-      console.error("Error starting attendance:", error);
-      alert("Failed to start attendance session");
-    } finally {
+      console.error("Error fetching students:", error);
       setLoading(false);
     }
   };
 
-  const closeAttendance = async () => {
-    if (!attendanceSession) return;
+  const toggleAttendance = async (studentId, studentName) => {
+    if (!activeSession) return;
 
     try {
-      await updateDoc(doc(db, "attendance", attendanceSession.id), {
-        status: "closed",
-      });
-    } catch (error) {
-      console.error("Error closing attendance:", error);
-    }
-  };
-
-  const toggleStudentAttendance = async (studentId, isCurrentlyPresent) => {
-    if (!attendanceSession) {
-      alert("No active attendance session");
-      return;
-    }
-
-    try {
-      const attendanceRef = doc(db, "attendance", attendanceSession.id);
-
-      if (!isCurrentlyPresent) {
-        await updateDoc(attendanceRef, {
-          attendees: arrayUnion(studentId),
-        });
+      if (attendanceMap[studentId]) {
+        await deleteDoc(doc(db, "attendance", attendanceMap[studentId]));
       } else {
-        await updateDoc(attendanceRef, {
-          attendees: arrayRemove(studentId),
+        const attendId = `${activeSession.id}_${studentId}`;
+        await setDoc(doc(db, "attendance", attendId), {
+          sessionId: activeSession.id,
+          studentId: studentId,
+          studentName: studentName,
+          courseId: activeSession.courseId,
+          courseName: activeSession.courseName || "Unknown Course",
+          timestamp: serverTimestamp(),
+          method: "manual",
+          status: "present",
+          instructorId: user?.uid,
         });
       }
     } catch (error) {
-      console.error("Error updating attendance:", error);
-      alert("Failed to update attendance");
+      console.error("Error toggling attendance:", error);
+      alert("Manual update failed. Please check permissions.");
     }
   };
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+  const filteredStudents = students.filter((s) =>
+    s.fullName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const attendancePercentage =
-    students.length > 0
-      ? ((attendees.length / students.length) * 100).toFixed(1)
-      : 0;
-
-  // عرض قائمة المواد لو مفيش subjectId
-  if (!subjectId) {
-    if (loadingCourses) {
-      return (
-        <PageLayout title="Attendance Management" subtitle="Loading...">
-          <div className={styles.loading}>Loading courses...</div>
-        </PageLayout>
-      );
-    }
-
+  if (loading) {
     return (
-      <PageLayout
-        title="Attendance Management"
-        subtitle="Select a course to manage attendance"
-      >
-        <div className={styles.coursesGrid}>
-          {coursesList.map((course) => (
-            <div key={course.id} className={styles.courseCard}>
-              <div className={styles.courseHeader}>
-                <span className={styles.courseCode}>{course.code}</span>
-                <span className={styles.courseHours}>
-                  {course.creditHours || 3} Credits
-                </span>
-              </div>
-              <div className={styles.courseBody}>
-                <h3 className={styles.courseName}>{course.name}</h3>
-                <div className={styles.courseInstructor}>
-                  👥 {course.studentsCount} Students
-                </div>
-                {/* تم تعديل هذا الزرار ليوجه إلى صفحة الـ Manager بدلاً من إعادة تحميل نفس الصفحة */}
-                <button
-                  className={styles.courseButton}
-                  onClick={() =>
-                    navigate(`/instructor/attendance/${course.id}`)
-                  }
-                >
-                  📝 Manage Attendance
-                </button>
-              </div>
-            </div>
-          ))}
+      <PageLayout title="Attendance Management" subtitle="Loading...">
+        <div className={styles.loading}>Loading...</div>
+      </PageLayout>
+    );
+  }
 
-          {coursesList.length === 0 && (
-            <div className={styles.emptyState}>
-              <h3>No Courses Found</h3>
-              <p>You haven't been assigned to any courses yet</p>
-            </div>
-          )}
+  if (!activeSession) {
+    return (
+      <PageLayout 
+        title="Attendance Management" 
+        subtitle="Manage student attendance"
+        actions={
+          <button 
+            className={styles.courseButton}
+            onClick={() => navigate('/instructor/lectures')}
+            style={{ width: 'auto' }}
+          >
+            🎬 Go to Lectures
+          </button>
+        }
+      >
+        <div className={styles.emptyState}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
+          <h3>No Active Lecture</h3>
+          <p>Start a session from the Lectures page to manage attendance records.</p>
         </div>
       </PageLayout>
     );
   }
 
-  // عرض حالة التحميل
-  if (!course) {
-    return (
-      <PageLayout title="Attendance Management" subtitle="Loading...">
-        <div className={styles.loading}>Loading course data...</div>
-      </PageLayout>
-    );
-  }
+  const presentCount = Object.keys(attendanceMap).length;
+  const totalStudents = students.length;
+  const attendanceRate = totalStudents > 0 ? ((presentCount / totalStudents) * 100).toFixed(1) : 0;
 
   return (
     <PageLayout
-      title="Attendance Management"
-      subtitle={`${course.name} - Manage student attendance`}
-      actions={<button className={styles.exportButton}>📥 Export CSV</button>}
-    >
-      {/* Select Lecture */}
-      {lectureSessions.length === 0 && (
-        <div
-          className={styles.card}
-          style={{ marginBottom: "24px", background: "#fef3c7" }}
-        >
-          <p>⚠️ No active lecture session. Please start a lecture first.</p>
-          <button
-            className={styles.courseButton}
-            onClick={() => navigate(`/instructor/lectures/start/${subjectId}`)}
-            style={{ marginTop: "12px", width: "auto" }}
-          >
-            Start Lecture
-          </button>
-        </div>
-      )}
-
-      {lectureSessions.length > 0 && !selectedLecture && (
-        <div className={styles.card} style={{ marginBottom: "24px" }}>
-          <h3>Select Active Lecture</h3>
-          <div
-            className={styles.grid}
-            style={{
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              marginTop: "16px",
+      title="Instructor Control Panel"
+      subtitle={activeSession.courseName}
+      actions={
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button 
+            className={styles.exportButton}
+            onClick={() => {
+              const csvData = students.map(s => ({
+                Name: s.fullName,
+                ID: s.universityId,
+                Status: attendanceMap[s.id] ? 'Present' : 'Absent',
+                Method: attendanceDetails[s.id]?.method || '-',
+                Time: attendanceDetails[s.id]?.time || '-'
+              }));
+              console.log('CSV Data:', csvData);
+              alert('Export to console - Check developer console');
             }}
           >
-            {lectureSessions.map((lecture) => (
-              <button
-                key={lecture.id}
-                onClick={() => setSelectedLecture(lecture)}
-                className={styles.changePhotoButton}
-                style={{ padding: "12px" }}
-              >
-                {lecture.startTime?.toDate()
-                  ? new Date(lecture.startTime.toDate()).toLocaleTimeString()
-                  : "Lecture"}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Attendance Controls */}
-      {selectedLecture && (
-        <div className={styles.card} style={{ marginBottom: "24px" }}>
-          <h2>Attendance Session</h2>
-          <p style={{ color: "#64748b", marginBottom: "16px" }}>
-            Lecture:{" "}
-            {selectedLecture.startTime?.toDate()
-              ? new Date(selectedLecture.startTime.toDate()).toLocaleString()
-              : "Active"}
-          </p>
-
-          {!attendanceSession ? (
-            <div
-              style={{
-                display: "flex",
-                gap: "16px",
-                alignItems: "flex-end",
-                flexWrap: "wrap",
-              }}
-            >
-              <div>
-                <label className={styles.summaryLabel}>
-                  Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="30"
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                  className={styles.input}
-                  style={{ width: "100px" }}
-                />
-              </div>
-              <button
-                onClick={startAttendance}
-                disabled={loading}
-                className={styles.saveButton}
-              >
-                {loading ? "Starting..." : "Start Attendance Session"}
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: "16px",
-                  flexWrap: "wrap",
-                  gap: "16px",
-                }}
-              >
-                <div>
-                  <span className={styles.summaryLabel}>Time Remaining: </span>
-                  <span
-                    style={{
-                      fontSize: "28px",
-                      fontWeight: "bold",
-                      color: "#f97316",
-                    }}
-                  >
-                    {formatTime(timeLeft)}
-                  </span>
-                </div>
-                <button
-                  onClick={closeAttendance}
-                  className={styles.cancelButton}
-                  style={{
-                    background: "#ef4444",
-                    color: "white",
-                    border: "none",
-                  }}
-                >
-                  Close Session Early
-                </button>
-              </div>
-
-              <div className={styles.progressBar} style={{ height: "8px" }}>
-                <div
-                  className={styles.progressFill}
-                  style={{
-                    width: `${(timeLeft / (duration * 60)) * 100}%`,
-                    backgroundColor: "#f97316",
-                  }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Statistics */}
-      <div className={styles.summaryCards} style={{ marginBottom: "24px" }}>
-        <div className={styles.summaryCard}>
-          <div
-            className={styles.summaryIcon}
-            style={{ backgroundColor: "#3b82f620" }}
+            📥 Export CSV
+          </button>
+          <button 
+            className={styles.courseButton}
+            onClick={() => navigate('/instructor/lectures')}
+            style={{ width: 'auto', padding: '10px 20px' }}
           >
-            👥
-          </div>
+            🎬 Back to Lectures
+          </button>
+        </div>
+      }
+    >
+      {/* Statistics Cards */}
+      <div className={styles.summaryCards} style={{ marginBottom: '24px' }}>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryIcon} style={{ backgroundColor: '#3b82f620' }}>👥</div>
           <div>
             <span className={styles.summaryLabel}>Total Students</span>
-            <span className={styles.summaryValue}>{students.length}</span>
+            <span className={styles.summaryValue}>{totalStudents}</span>
           </div>
         </div>
         <div className={styles.summaryCard}>
-          <div
-            className={styles.summaryIcon}
-            style={{ backgroundColor: "#10b98120" }}
-          >
-            ✅
-          </div>
+          <div className={styles.summaryIcon} style={{ backgroundColor: '#10b98120' }}>✅</div>
           <div>
             <span className={styles.summaryLabel}>Present</span>
-            <span className={styles.summaryValue} style={{ color: "#10b981" }}>
-              {attendees.length}
-            </span>
+            <span className={styles.summaryValue} style={{ color: '#10b981' }}>{presentCount}</span>
           </div>
         </div>
         <div className={styles.summaryCard}>
-          <div
-            className={styles.summaryIcon}
-            style={{ backgroundColor: "#f9731620" }}
-          >
-            📊
+          <div className={styles.summaryIcon} style={{ backgroundColor: '#ef444420' }}>❌</div>
+          <div>
+            <span className={styles.summaryLabel}>Absent</span>
+            <span className={styles.summaryValue} style={{ color: '#ef4444' }}>{totalStudents - presentCount}</span>
           </div>
+        </div>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryIcon} style={{ backgroundColor: '#f9731620' }}>📊</div>
           <div>
             <span className={styles.summaryLabel}>Attendance Rate</span>
-            <span className={styles.summaryValue}>{attendancePercentage}%</span>
+            <span className={styles.summaryValue}>{attendanceRate}%</span>
           </div>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '12px',
+          padding: '12px 16px',
+          gap: '10px'
+        }}>
+          <span>🔍</span>
+          <input
+            type="text"
+            placeholder="Search by student name or ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              flex: 1,
+              border: 'none',
+              outline: 'none',
+              fontSize: '14px',
+              background: 'transparent'
+            }}
+          />
         </div>
       </div>
 
@@ -523,73 +267,97 @@ const Attendance = () => {
           <thead>
             <tr>
               <th>Student Name</th>
-              <th>Student Code</th>
+              <th>Student ID</th>
               <th>Status</th>
-              {attendanceSession && <th>Actions</th>}
+              <th>Time</th>
+              <th>Method</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {students.map((student) => {
-              const isPresent = attendees.includes(student.id);
-
+            {filteredStudents.map((student) => {
+              const isPresent = !!attendanceMap[student.id];
+              const detail = attendanceDetails[student.id];
+              
               return (
-                <tr key={student.id}>
-                  <td style={{ fontWeight: "500" }}>
-                    {student.fullName || student.name}
-                  </td>
+                <tr key={student.id} style={{
+                  borderLeft: isPresent ? '6px solid #22c55e' : '6px solid #ef4444'
+                }}>
+                  <td style={{ fontWeight: '500' }}>{student.fullName}</td>
+                  <td>{student.universityId}</td>
                   <td>
-                    {student.code ||
-                      student.uniqueCode ||
-                      student.id.slice(0, 8)}
-                  </td>
-                  <td>
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm ${
-                        isPresent
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {isPresent ? "✓ Present" : "✗ Absent"}
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      background: isPresent ? '#dcfce7' : '#fee2e2',
+                      color: isPresent ? '#166534' : '#991b1b'
+                    }}>
+                      {isPresent ? 'Present' : 'Absent'}
                     </span>
                   </td>
-                  {attendanceSession && (
-                    <td>
+                  <td style={{ fontSize: '13px', color: '#64748b' }}>
+                    {detail?.time || '-'}
+                  </td>
+                  <td>
+                    {isPresent && (
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        background: detail?.method === 'manual' ? '#fef3c7' : '#e0f2fe',
+                        color: detail?.method === 'manual' ? '#92400e' : '#0369a1'
+                      }}>
+                        {detail?.method === 'manual' ? '🛡️ Manual' : '📱 Auto'}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '8px' }}>
                       <button
-                        onClick={() =>
-                          toggleStudentAttendance(student.id, isPresent)
-                        }
+                        onClick={() => !isPresent && toggleAttendance(student.id, student.fullName)}
                         style={{
-                          padding: "6px 16px",
-                          borderRadius: "8px",
-                          fontSize: "13px",
-                          fontWeight: "500",
-                          cursor: "pointer",
-                          border: "none",
-                          background: isPresent ? "#ef4444" : "#10b981",
-                          color: "white",
-                          transition: "all 0.2s",
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: isPresent ? '#22c55e' : '#f1f5f9',
+                          color: isPresent ? 'white' : '#94a3b8',
+                          fontWeight: 'bold',
+                          fontSize: '14px'
                         }}
                       >
-                        {isPresent ? "Mark Absent" : "Mark Present"}
+                        P
                       </button>
-                    </td>
-                  )}
+                      <button
+                        onClick={() => isPresent && toggleAttendance(student.id, student.fullName)}
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: !isPresent ? '#ef4444' : '#f1f5f9',
+                          color: !isPresent ? 'white' : '#94a3b8',
+                          fontWeight: 'bold',
+                          fontSize: '14px'
+                        }}
+                      >
+                        A
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
-
-            {students.length === 0 && (
+            
+            {filteredStudents.length === 0 && (
               <tr>
-                <td
-                  colSpan={attendanceSession ? "4" : "3"}
-                  style={{
-                    textAlign: "center",
-                    padding: "40px",
-                    color: "#64748b",
-                  }}
-                >
-                  No students enrolled in this course
+                <td colSpan="6" style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
+                  No students found
                 </td>
               </tr>
             )}
@@ -598,35 +366,24 @@ const Attendance = () => {
       </div>
 
       {/* Instructions */}
-      {attendanceSession && (
-        <div
-          style={{
-            marginTop: "16px",
-            padding: "12px",
-            background: "#e0f2fe",
-            borderRadius: "12px",
-            fontSize: "14px",
-            color: "#0369a1",
-          }}
-        >
-          <p>
-            📝 <strong>How to use:</strong>
-          </p>
-          <p>
-            • Click on <strong>"Mark Present"</strong> to add a student to
-            attendance manually.
-          </p>
-          <p>
-            • Click on <strong>"Mark Absent"</strong> to remove a student from
-            attendance manually.
-          </p>
-          <p>
-            • Students can still register attendance through the mobile app
-            during the active session.
-          </p>
-          <p>• All changes are saved immediately to the database.</p>
-        </div>
-      )}
+      <div style={{
+        marginTop: '24px',
+        padding: '16px',
+        background: '#f8fafc',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        fontSize: '14px',
+        color: '#475569'
+      }}>
+        <p style={{ fontWeight: '600', marginBottom: '8px' }}>📌 How to use:</p>
+        <ul style={{ margin: 0, paddingLeft: '20px' }}>
+          <li>Click <strong>P</strong> to mark student as <strong style={{ color: '#22c55e' }}>Present</strong></li>
+          <li>Click <strong>A</strong> to mark student as <strong style={{ color: '#ef4444' }}>Absent</strong></li>
+          <li>Students can also register through the mobile app during active session</li>
+          <li>Manual entries are marked with 🛡️ badge</li>
+          <li>All changes are saved immediately to the database</li>
+        </ul>
+      </div>
     </PageLayout>
   );
 };
