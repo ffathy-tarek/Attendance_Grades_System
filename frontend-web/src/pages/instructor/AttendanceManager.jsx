@@ -41,7 +41,7 @@ const AttendanceManager = () => {
     fetchCourse();
   }, [subjectId]);
 
-  // جلب الجلسة النشطة
+
   useEffect(() => {
     if (!subjectId) return;
 

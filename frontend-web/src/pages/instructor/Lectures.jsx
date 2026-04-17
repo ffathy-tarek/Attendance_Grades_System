@@ -14,7 +14,7 @@ import {
   orderBy,
   Timestamp,
   getDoc,
-  GeoPoint, // ✅ إضافة GeoPoint
+  GeoPoint, 
 } from "firebase/firestore";
 import PageLayout from "../../components/student/PageLayout";
 import styles from "../../components/student/PageLayout.module.css";
@@ -49,7 +49,7 @@ const Lectures = () => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
           
-          // ✅ إنشاء GeoPoint من الإحداثيات
+         
           const geoPoint = new GeoPoint(lat, lng);
           
           console.log("📍 GeoPoint created:", geoPoint);
@@ -71,7 +71,7 @@ const Lectures = () => {
   useEffect(() => {
     if (!user) return;
 
-    // جلب المواد
+   
     const fetchCourses = async () => {
       try {
         const qC = query(
@@ -86,7 +86,7 @@ const Lectures = () => {
     };
     fetchCourses();
 
-    // متابعة جلسات المحاضرات
+   
     const qHistory = query(
       collection(db, "lecture_sessions"),
       where("instructorId", "==", user.uid),
@@ -125,17 +125,17 @@ const Lectures = () => {
   const startSession = async (course) => {
     setStartingSession(true);
     try {
-      // 📍 جلب موقع المعلم كـ GeoPoint
+   
       let instructorLocation = null;
       try {
         instructorLocation = await getCurrentLocationAsGeoPoint();
         console.log("📍 GeoPoint to save:", instructorLocation);
       } catch (locationError) {
         console.warn("Could not get location:", locationError);
-        // نستمر بدون موقع
+      
       }
 
-      // ✅ إنشاء بيانات الجلسة مع الموقع كـ GeoPoint
+    
       const sessionData = {
         courseId: course.id,
         courseName: course.name || course.courseName,
@@ -146,7 +146,6 @@ const Lectures = () => {
         durationMinutes: selectedDuration,
       };
 
-      // ✅ إضافة الموقع فقط إذا تم الحصول عليه (كـ GeoPoint)
       if (instructorLocation) {
         sessionData.instructorLocation = instructorLocation;
       }
@@ -235,7 +234,7 @@ const Lectures = () => {
     setDetailsLoading(false);
   };
 
-  // دالة لعرض إحداثيات GeoPoint كنص مقروء
+
   const formatGeoPoint = (geoPoint) => {
     if (!geoPoint) return null;
     const lat = geoPoint.latitude;
@@ -411,7 +410,7 @@ const Lectures = () => {
               {activeSession.courseName}
             </h3>
 
-            {/* عرض موقع المعلم إذا كان موجوداً (كـ GeoPoint) */}
+         
             {activeSession.instructorLocation && (
               <div style={{ marginBottom: "15px", fontSize: "12px", color: "#64748b", wordBreak: "break-all" }}>
                 📍 {formatGeoPoint(activeSession.instructorLocation)}
