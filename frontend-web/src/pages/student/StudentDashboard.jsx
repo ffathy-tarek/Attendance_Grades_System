@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+// ==================== StudentDashboard.jsx (معدل بالكامل) ====================
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
 import { useAuth } from '../../context/AuthContext';
@@ -21,98 +23,129 @@ const StudentDashboard = () => {
     averageGrade: 0
   });
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState({});
   const [message, setMessage] = useState({ courseId: '', text: '', type: '' });
   const [locationError, setLocationError] = useState(null);
   const [showLocationPermission, setShowLocationPermission] = useState(false);
   const [pendingAttendance, setPendingAttendance] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  
+  // Refs for preventing multiple loads and caching
+  const isLoadingRef = useRef(false);
+  const debounceTimerRef = useRef(null);
+  const lastLoadTimeRef = useRef(0);
+  const cacheRef = useRef({ courses: null, stats: null, timestamp: 0 });
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async (force = false) => {
     if (!user?.uid) return;
-
+    
+    // Check cache (cache valid for 30 seconds)
+    const now = Date.now();
+    if (!force && cacheRef.current.courses && (now - cacheRef.current.timestamp) < 30000) {
+      console.log('📦 Using cached data');
+      setCourses(cacheRef.current.courses);
+      setStats(cacheRef.current.stats);
+      setLastUpdated(new Date(cacheRef.current.timestamp));
+      setLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+    
+    // Prevent multiple simultaneous loads
+    if (isLoadingRef.current) return;
+    
+    // Prevent rapid consecutive loads (2 seconds minimum between loads)
+    if (!force && (now - lastLoadTimeRef.current) < 2000) {
+      console.log('⏳ Skipping load, too soon since last load');
+      return;
+    }
+    
+    isLoadingRef.current = true;
+    if (!force) setLoading(true);
+    setIsRefreshing(true);
+    lastLoadTimeRef.current = now;
+    
     try {
-      console.log('🔄 Loading dashboard data for UID:', user.uid);
+      console.log('🔄 Loading dashboard data from server...');
       const [coursesData, statsData] = await Promise.all([
         getCoursesForDashboard(user.uid),
         getTotalStats(user.uid)
       ]);
 
+      // Save to cache
+      cacheRef.current = {
+        courses: coursesData || [],
+        stats: statsData || {
+          totalCourses: 0,
+          averageAttendance: 0,
+          perfectAttendance: 0,
+          needingAttention: 0,
+          totalLectures: 0,
+          totalPresent: 0,
+          totalAbsences: 0,
+          averageGrade: 0
+        },
+        timestamp: now
+      };
+      
       setCourses(coursesData || []);
-      setStats(statsData || {
-        totalCourses: 0,
-        averageAttendance: 0,
-        perfectAttendance: 0,
-        needingAttention: 0,
-        totalLectures: 0,
-        totalPresent: 0,
-        totalAbsences: 0,
-        averageGrade: 0
-      });
+      setStats(statsData || {});
       setLastUpdated(new Date());
       console.log('✅ Dashboard data loaded:', coursesData.length, 'courses');
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
+      isLoadingRef.current = false;
     }
+  }, [user?.uid]);
+
+  const handleManualRefresh = () => {
+    loadDashboardData(true);
   };
 
-  // Real-time listeners
+  // Real-time listener with debounce - only ONE listener
   useEffect(() => {
     if (!user?.uid) {
       setLoading(false);
       return;
     }
 
-    console.log('🎧 Setting up real-time listeners for UID:', user.uid);
-    setLoading(true);
-    loadDashboardData();
+    console.log('🎧 Setting up single real-time listener for UID:', user.uid);
     
-   
+    // Initial load
+    loadDashboardData(true);
+    
+    // Single listener for attendance only (most important for real-time updates)
     const attendanceRef = collection(db, 'attendance');
     const attendanceQuery = query(
       attendanceRef,
-      where('studentId', '==', user.uid),
-      where('status', '==', 'present')
-    );
-    
-    const unsubscribeAttendance = onSnapshot(attendanceQuery, (snapshot) => {
-      console.log('📊 Dashboard: Attendance changed! Total records:', snapshot.size);
-      snapshot.docChanges().forEach(change => {
-        console.log('  - Change type:', change.type);
-        console.log('  - Record ID:', change.doc.id);
-        console.log('  - Data:', change.doc.data());
-      });
-      loadDashboardData();
-    });
-    
-    
-    const enrollmentsRef = collection(db, 'enrollments');
-    const enrollmentsQuery = query(
-      enrollmentsRef,
       where('studentId', '==', user.uid)
     );
     
-    const unsubscribeEnrollments = onSnapshot(enrollmentsQuery, () => {
-      console.log('✅ Dashboard: Enrollments changed');
-      loadDashboardData();
+    const unsubscribeAttendance = onSnapshot(attendanceQuery, () => {
+      // Debounce to prevent multiple rapid updates
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      
+      debounceTimerRef.current = setTimeout(() => {
+        console.log('📊 Attendance changed, reloading data with debounce...');
+        loadDashboardData(true);
+      }, 1000);
     });
     
-   
-    const sessionsRef = collection(db, 'lecture_sessions');
-    const unsubscribeSessions = onSnapshot(sessionsRef, () => {
-      console.log('✅ Dashboard: Sessions changed');
-      loadDashboardData();
-    });
-    
+    // Cleanup function
     return () => {
       console.log('🔴 Dashboard: Cleaning up listeners');
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
       unsubscribeAttendance();
-      unsubscribeEnrollments();
-      unsubscribeSessions();
     };
-  }, [user?.uid]);
+  }, [user?.uid, loadDashboardData]);
 
   const handleTakeAttendance = async (course) => {
     setAttendanceLoading(prev => ({ ...prev, [course.id]: true }));
@@ -152,6 +185,11 @@ const StudentDashboard = () => {
     
     setAttendanceLoading(prev => ({ ...prev, [course.id]: false }));
     
+    // Auto refresh after attendance to show updated data
+    setTimeout(() => {
+      loadDashboardData(true);
+    }, 500);
+    
     setTimeout(() => {
       setMessage({ courseId: '', text: '', type: '' });
       setLocationError(null);
@@ -184,6 +222,11 @@ const StudentDashboard = () => {
       setAttendanceLoading(prev => ({ ...prev, [pendingAttendance.id]: false }));
       setPendingAttendance(null);
       
+      // Auto refresh after attendance to show updated data
+      setTimeout(() => {
+        loadDashboardData(true);
+      }, 500);
+      
       setTimeout(() => {
         setMessage({ courseId: '', text: '', type: '' });
         setLocationError(null);
@@ -211,17 +254,17 @@ const StudentDashboard = () => {
   };
 
   const getWarningMessage = (absencePercent) => {
-    if (absencePercent > 25) return '🚫 You have been Denied';
-    if (absencePercent == 25) return '⚠️ You have a Second warning';
-    if (absencePercent >=15) return '⚠️ You have a First warning';
+    if (absencePercent > 25) return '🚫 You have been denied';
+    if (absencePercent === 25) return '⚠️ You have a second warning';
+    if (absencePercent >= 15) return '⚠️ You have a first warning';
     return '';
   };
 
-  if (loading) {
+  if (loading && courses.length === 0) {
     return (
       <PageLayout>
         <div style={{ textAlign: 'center', padding: '50px' }}>
-          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading....</div>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading...</div>
         </div>
       </PageLayout>
     );
@@ -242,24 +285,44 @@ const StudentDashboard = () => {
       )}
       
       <div className={styles.dashboardHeader}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <h1 className={styles.dashboardTitle}>
             {getGreeting()}, {user?.fullName || user?.name || 'Ahmed'}! 👋
           </h1>
-          <div style={{
-            background: 'white',
-            padding: '8px 16px',
-            borderRadius: '20px',
-            border: '1px solid #e2e8f0',
-            color: '#475569',
-            fontSize: '14px'
-          }}>
-            {new Date().toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              style={{
+                padding: '8px 16px',
+                background: isRefreshing ? '#94a3b8' : '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: isRefreshing ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <span>🔄</span> {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+            <div style={{
+              background: 'white',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              border: '1px solid #e2e8f0',
+              color: '#475569',
+              fontSize: '14px'
+            }}>
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </div>
           </div>
         </div>
         <p className={styles.dashboardSubtitle}>
@@ -276,7 +339,7 @@ const StudentDashboard = () => {
           fontSize: '11px',
           color: '#0369a1'
         }}>
-          🔄 Last Update | Auto Update {lastUpdated.toLocaleTimeString()}
+          🔄 Live Auto Update • Last sync: {lastUpdated.toLocaleTimeString()}
         </div>
       </div>
 
@@ -323,6 +386,11 @@ const StudentDashboard = () => {
           <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#0f172a' }}>
             Your Courses
           </h2>
+          {loading && courses.length > 0 && (
+            <div style={{ fontSize: '12px', color: '#64748b' }}>
+              <span>🔄 Updating...</span>
+            </div>
+          )}
         </div>
 
         <div className={styles.coursesGrid}>
@@ -388,7 +456,7 @@ const StudentDashboard = () => {
                               cursor: 'pointer'
                             }}
                           >
-                            📍 Show Lecture Location
+                            📍 Show lecture location
                           </button>
                         )}
                       </div>
@@ -414,10 +482,12 @@ const StudentDashboard = () => {
                       onClick={() => handleTakeAttendance(course)}
                       disabled={isLoading}
                       style={{
-                        ...(isLoading ? { opacity: 0.6, cursor: 'not-allowed' } : {})
+                        background: isLoading ? '#94a3b8' : '#2563eb',
+                        cursor: isLoading ? 'not-allowed' : 'pointer',
+                        opacity: isLoading ? 0.7 : 1,
                       }}
                     >
-                      {isLoading ? 'Taking Attendence..' : '📝 Take Attendence'}
+                      {isLoading ? 'Taking attendance...' : '📝 Take Attendance'}
                     </button>
                   </div>
                 </div>
@@ -425,7 +495,7 @@ const StudentDashboard = () => {
             })
           ) : (
             <div style={{ textAlign: 'center', padding: '40px', color: '#64748b', gridColumn: '1/-1' }}>
-             No Courses Exist..
+              No courses available
             </div>
           )}
         </div>

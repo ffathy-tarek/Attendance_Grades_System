@@ -24,11 +24,9 @@ const ResetPassword = () => {
     }
 
     try {
-
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
 
-    
       await updatePassword(user, newPassword);
 
       alert("Password changed successfully!");
