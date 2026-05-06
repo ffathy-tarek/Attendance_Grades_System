@@ -1,3 +1,4 @@
+import React from 'react';
 import { NavLink, useNavigate } from "react-router-dom";
 import { auth } from "../../firebase"; 
 import { signOut } from "firebase/auth";
@@ -42,6 +43,10 @@ const InstructorSidebar = () => {
 
         <NavLink to="/instructor/profile" style={linkStyle}>
           Profile
+        </NavLink>
+
+        <NavLink to="/instructor/reviews" style={linkStyle}>
+          View Reviews
         </NavLink>
 
         <NavLink to="/instructor/reset-password" style={linkStyle}>

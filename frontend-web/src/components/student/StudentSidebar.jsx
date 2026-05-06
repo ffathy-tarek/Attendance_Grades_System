@@ -40,6 +40,10 @@ const StudentSidebar = () => {
           Profile
         </NavLink>
 
+         <NavLink to="/student/reviews" style={linkStyle}>
+          Reviews
+        </NavLink>
+
         <NavLink to="/student/reset-password" style={linkStyle}>
           Reset Password
         </NavLink>
