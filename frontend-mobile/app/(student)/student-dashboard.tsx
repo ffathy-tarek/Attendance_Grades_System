@@ -363,6 +363,14 @@ export default function StudentDashboard() {
               onPress={() => router.push("/(student)/student-profile" as any)}
             />
           </View>
+          <View style={s.quickRow}>
+            <QuickBtn
+              icon="star-outline"
+              label="Reviews"
+              color="#0ea5e9"
+              onPress={() => router.push("/(student)/student-reviews" as any)}
+            />
+          </View>
         </View>
 
         {/* Courses List */}

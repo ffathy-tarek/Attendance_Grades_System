@@ -128,6 +128,7 @@ export default function InstructorDashboard() {
             <ActionListItem icon="clipboard-outline" title="Manual Attendance" onPress={() => router.push('/attendance')} />
             <ActionListItem icon="document-text-outline" title="Gradebook Manager" onPress={() => router.push('/add-grades')} />
             <ActionListItem icon="list-outline" title="Student List" onPress={() => router.push('/students-list')} />
+            <ActionListItem icon="star-outline" title="Student Reviews" onPress={() => router.push('/instructor-reviews')} />
           </View>
         </View>
       </ScrollView>

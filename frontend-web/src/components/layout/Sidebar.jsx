@@ -66,7 +66,7 @@ const Sidebar = () => {
   return (
     <>
       <div style={sidebarStyle}>
-        <h2 style={logoStyle}>Attendance</h2>
+        <h2 style={logoStyle}>Admin</h2>
 
         <nav style={{ marginTop: "40px" }}>
           <NavLink to="/admin" end style={linkStyle}>

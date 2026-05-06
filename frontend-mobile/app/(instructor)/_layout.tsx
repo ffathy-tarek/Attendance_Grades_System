@@ -12,6 +12,8 @@ export default function InstructorLayout() {
       <Stack.Screen name="students-list" />
       <Stack.Screen name="add-grades" />
       <Stack.Screen name="lectures" />
+      <Stack.Screen name="instructor-reviews" />
+
     </Stack>
   );
 }

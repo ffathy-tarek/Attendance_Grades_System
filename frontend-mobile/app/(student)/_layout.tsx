@@ -14,6 +14,7 @@ export default function StudentLayout() {
       <Stack.Screen name="student-attendance" />
       <Stack.Screen name="student-grades" />
       <Stack.Screen name="student-profile" />
+      <Stack.Screen name="student-reviews" />
     </Stack>
   );
 }
