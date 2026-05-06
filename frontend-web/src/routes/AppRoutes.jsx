@@ -25,6 +25,7 @@ import CoursesPage from "../pages/student/CoursesPage.jsx";
 import CourseDetails from "../pages/student/CourseDetails.jsx";
 import ProfilePage from "../pages/student/ProfilePage.jsx";
 import ResetPassword from "../pages/student/ResetPassword.jsx";
+import ReviewsPage from '../pages/student/ReviewsPage';
 
 /* ===== Instructor Pages ===== */
 import InstructorLayout from "../components/instructor/InstructorLayout";
@@ -36,6 +37,7 @@ import Grades from "../pages/instructor/Grades";
 import SeeStudents from "../pages/instructor/SeeStudents";
 import InstructorProfile from "../pages/instructor/InstructorProfile";
 import AttendanceManager from "../pages/instructor/AttendanceManager.jsx";
+import ViewReviewsPage from "../pages/instructor/ViewReviewsPage.jsx";
 
 /* ===== 404 Page ===== */
 const NotFound = () => (
@@ -111,6 +113,7 @@ const AppRoutes = () => {
           <Route path="courses/:courseId" element={<CourseDetails />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="reset-password" element={<ResetPassword />} />
+          <Route path="reviews" element={<ReviewsPage />} />
         </Route>
 
         {/* ===== Instructor Routes ===== */}
@@ -143,6 +146,7 @@ const AppRoutes = () => {
           <Route path="students" element={<SeeStudents />} />
           <Route path="profile" element={<InstructorProfile />} />
           <Route path="reset-password" element={<ResetPassword />} />
+          <Route path="reviews" element={<ViewReviewsPage />} />
         </Route>
 
         {/* ===== 404 ===== */}

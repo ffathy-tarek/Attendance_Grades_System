@@ -144,7 +144,7 @@ const InstructorProfile = () => {
     return (
       <PageLayout title="Profile" subtitle="Manage your personal information">
         <div style={{ textAlign: 'center', padding: '50px' }}>
-          <div style={{ fontSize: '18px', color: '#64748b' }}>جاري التحميل...</div>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading ...</div>
         </div>
       </PageLayout>
     );
