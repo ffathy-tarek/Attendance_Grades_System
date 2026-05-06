@@ -46,7 +46,7 @@ const InstructorSidebar = () => {
         </NavLink>
 
         <NavLink to="/instructor/reviews" style={linkStyle}>
-          Course Reviews
+          View Reviews
         </NavLink>
 
         <NavLink to="/instructor/reset-password" style={linkStyle}>
