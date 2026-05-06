@@ -1,7 +1,9 @@
+// ==================== coursesData.jsx (الكود الأصلي الصحيح) ====================
+
 import { collection, query, where, getDocs, doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { db } from '../../firebase';
 
-// الدوال المساعدة
+// Helper functions
 const getStatusFromGrade = (total) => {
   if (total >= 85) return "Excellent";
   if (total >= 75) return "Very Good";
@@ -10,8 +12,6 @@ const getStatusFromGrade = (total) => {
   return "Fail";
 };
 
-/**
- */
 const getInstructorNames = async (instructorIds) => {
   try {
     if (!instructorIds || !Array.isArray(instructorIds) || instructorIds.length === 0) {
@@ -40,9 +40,6 @@ const getInstructorNames = async (instructorIds) => {
   }
 };
 
-/**
- *  اسم مدرس واحد من مجموعة users
- */
 const getInstructorName = async (instructorId) => {
   try {
     if (!instructorId) return 'Unknown';
@@ -62,9 +59,6 @@ const getInstructorName = async (instructorId) => {
   }
 };
 
-/**
- * استخراج اسم الدكتور من بيانات المادة
- */
 const extractProfessorName = async (courseData) => {
   if (courseData.instructorIds && Array.isArray(courseData.instructorIds) && courseData.instructorIds.length > 0) {
     const instructorNames = await getInstructorNames(courseData.instructorIds);
@@ -114,7 +108,7 @@ const getDefaultIcon = (courseName) => {
   return '📚';
 };
 
-// ==================== دوال الموقع الجغرافي ====================
+// ==================== Geolocation Functions ====================
 
 export const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3;
@@ -134,7 +128,7 @@ export const calculateDistance = (lat1, lon1, lat2, lon2) => {
 export const getCurrentLocation = () => {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Broswer Does not support Location'));
+      reject(new Error('Browser does not support location'));
     }
     
     navigator.geolocation.getCurrentPosition(
@@ -149,16 +143,16 @@ export const getCurrentLocation = () => {
         let errorMessage = '';
         switch(error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'please Approve Location permission And try Again.';
+            errorMessage = 'Please approve location permission and try again.';
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location Data Does not exist';
+            errorMessage = 'Location data not available';
             break;
           case error.TIMEOUT:
-            errorMessage = 'Location permission time out';
+            errorMessage = 'Location request timed out';
             break;
           default:
-            errorMessage = 'try Again';
+            errorMessage = 'Please try again';
         }
         reject(new Error(errorMessage));
       },
@@ -179,7 +173,7 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     if (!sessionSnap.exists()) {
       return { 
         success: false, 
-        message: 'session does not exist' 
+        message: 'Session does not exist' 
       };
     }
     
@@ -188,7 +182,7 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     if (session.attendanceOpen !== true) {
       return { 
         success: false, 
-        message: '⚠️ The instructor closed the Attendence for this lecture' 
+        message: '⚠️ The instructor closed the attendance for this lecture' 
       };
     }
     
@@ -197,7 +191,7 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     if (!instructorLocation || !instructorLocation.latitude || !instructorLocation.longitude) {
       return { 
         success: false, 
-        message: '📍 Can not get the instructoe location try again later' 
+        message: '📍 Cannot get instructor location, please try again later' 
       };
     }
     
@@ -213,13 +207,13 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     if (distance <= allowedDistance) {
       return { 
         success: true, 
-        message: `✅ you are close to correct location(${Math.round(distance)} Meter)`,
+        message: `✅ You are close to the correct location (${Math.round(distance)} meters)`,
         distance: Math.round(distance)
       };
     } else {
       return { 
         success: false, 
-        message: `❌ you are far away for lecture location\ndistance: ${Math.round(distance)} meter\nApproved : ${allowedDistance} meter\nyou have to be around ${allowedDistance} meter from instructor location.`,
+        message: `❌ You are far from the lecture location\ndistance: ${Math.round(distance)} meters\nAllowed: ${allowedDistance} meters\nyou must be within ${allowedDistance} meters of the instructor location.`,
         distance: Math.round(distance),
         allowedDistance: allowedDistance,
         instructorLocation: instructorLocation
@@ -229,7 +223,7 @@ export const checkLocationProximity = async (sessionId, studentLocation) => {
     console.error('Error checking location proximity:', error);
     return { 
       success: false, 
-      message: 'can not git the location try again' 
+      message: 'Cannot get location, please try again' 
     };
   }
 };
@@ -239,11 +233,8 @@ export const openMapToLocation = (lat, lng) => {
   window.open(url, '_blank');
 };
 
-// ==================== دوال الحضور الأساسية ====================
+// ==================== Core Attendance Functions ====================
 
-/**
- *  بيانات الحضور لطالب معين
- */
 export const getAttendanceData = async (studentId) => {
   try {
     if (!studentId) return [];
@@ -256,7 +247,6 @@ export const getAttendanceData = async (studentId) => {
     );
     const attendanceSnapshot = await getDocs(attendanceQuery);
     
-    // تجميع عدد مرات الحضور حسب المادة
     const presentByCourse = {};
     attendanceSnapshot.forEach((doc) => {
       const data = doc.data();
@@ -264,7 +254,6 @@ export const getAttendanceData = async (studentId) => {
       presentByCourse[courseId] = (presentByCourse[courseId] || 0) + 1;
     });
 
-    //  المواد المسجل فيها الطالب
     const enrollmentsRef = collection(db, 'enrollments');
     const enrollmentsQuery = query(
       enrollmentsRef,
@@ -304,7 +293,7 @@ export const getAttendanceData = async (studentId) => {
         const absenceValue = parseFloat(absencePercent);
         if (absencesCount === 0) status = 'Perfect';
         else if (absenceValue > 25) status = 'Denied';
-        else if (absenceValue == 25) status = 'Second warning';
+        else if (absenceValue === 25) status = 'Second warning';
         else if (absenceValue >= 15) status = 'First warning';
         
         coursesList.push({
@@ -329,8 +318,6 @@ export const getAttendanceData = async (studentId) => {
   }
 };
 
-/**
- */
 export const getCoursesForDashboard = async (studentId) => {
   const data = await getAttendanceData(studentId);
   return data.map(course => ({
@@ -342,8 +329,6 @@ export const getCoursesForDashboard = async (studentId) => {
   }));
 };
 
-/**
- */
 export const getCoursesForCoursesPage = async (studentId) => {
   const data = await getAttendanceData(studentId);
   return data.map(course => ({
@@ -356,8 +341,6 @@ export const getCoursesForCoursesPage = async (studentId) => {
   }));
 };
 
-/**
- */
 export const getTotalStats = async (studentId) => {
   const data = await getAttendanceData(studentId);
   
@@ -424,9 +407,6 @@ export const getTotalStats = async (studentId) => {
   };
 };
 
-/**
- *  مادة محددة مع تفاصيل المحاضرات
- */
 export const getCourseById = async (courseId, studentId) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
@@ -520,9 +500,6 @@ export const getCourseById = async (courseId, studentId) => {
   }
 };
 
-/**
- *  تفاصيل درجة مادة محددة
- */
 export const getGradeDetails = async (studentId, courseId) => {
   try {
     const course = await getCourseById(courseId, studentId);
@@ -551,16 +528,12 @@ export const getGradeDetails = async (studentId, courseId) => {
   }
 };
 
-/**
- *  بيانات الدرجات لطالب معين
- */
 export const getGradesData = async (studentId) => {
   try {
     const attendanceData = await getAttendanceData(studentId);
     const gradesList = [];
     
     for (const course of attendanceData) {
-      // ✅ تعديل: جلب الدرجات من collection grades
       const gradesRef = collection(db, 'grades');
       const gradesQuery = query(
         gradesRef,
@@ -599,9 +572,6 @@ export const getGradesData = async (studentId) => {
   }
 };
 
-/**
- *   تفاصيل  الدرجات
- */
 export const getGradesStats = async (studentId) => {
   const grades = await getGradesData(studentId);
   
@@ -634,7 +604,7 @@ export const getGradesStats = async (studentId) => {
   };
 };
 
-// ==================== دوال تسجيل الحضور ====================
+// ==================== Attendance Recording Functions ====================
 
 export const checkActiveSession = async (courseId) => {
   try {
@@ -660,7 +630,6 @@ export const checkActiveSession = async (courseId) => {
   }
 };
 
-//  استخدام ID مخصص للتحقق (sessionId_studentId)
 export const checkExistingAttendance = async (sessionId, studentId) => {
   try {
     const customId = `${sessionId}_${studentId}`;
@@ -688,7 +657,6 @@ export const checkEnrollment = async (studentId, courseId) => {
   }
 };
 
-//  دالة تسجيل الحضور للطالب (مع موقع)
 export const markStudentPresent = async (studentId, courseId, sessionId, studentLocation, distance) => {
   try {
     const customId = `${sessionId}_${studentId}`;
@@ -709,7 +677,6 @@ export const markStudentPresent = async (studentId, courseId, sessionId, student
   }
 };
 
-//  دالة تسجيل الحضور للدكتور (يدوياً) - مع إضافة status
 export const markStudentPresentByDoctor = async (studentId, courseId, sessionId) => {
   try {
     const customId = `${sessionId}_${studentId}`;
@@ -719,7 +686,7 @@ export const markStudentPresentByDoctor = async (studentId, courseId, sessionId)
       sessionId: sessionId,
       studentId: studentId,
       courseId: courseId,
-      status: 'present',        // ✅ لازم يكون موجود
+      status: 'present',
       method: 'manual',
       timestamp: Timestamp.now(),
       markedBy: 'doctor'
@@ -732,14 +699,13 @@ export const markStudentPresentByDoctor = async (studentId, courseId, sessionId)
   }
 };
 
-// تسجيل الحضور للطالب
 export const takeAttendance = async (studentId, courseId) => {
   try {
     const activeSession = await checkActiveSession(courseId);
     if (!activeSession) {
       return { 
         success: false, 
-        message: '⚠️ No Session Exists At this time' 
+        message: '⚠️ No active session exists at this time' 
       };
     }
 
@@ -747,7 +713,7 @@ export const takeAttendance = async (studentId, courseId) => {
     if (!isEnrolled) {
       return { 
         success: false, 
-        message: '❌ You Are not Enrroled in this course' 
+        message: '❌ You are not enrolled in this course' 
       };
     }
 
@@ -755,7 +721,7 @@ export const takeAttendance = async (studentId, courseId) => {
     if (hasAttendance) {
       return { 
         success: false, 
-        message: '⚠️ You Took the Attedence before' 
+        message: '⚠️ You have already taken attendance' 
       };
     }
 
@@ -771,7 +737,7 @@ export const takeAttendance = async (studentId, courseId) => {
     if (!studentLocation) {
       return { 
         success: false, 
-        message: `📍 ${locationError || 'Approve Location Access.'}`,
+        message: `📍 ${locationError || 'Please approve location access.'}`,
         requiresLocation: true
       };
     }
@@ -797,7 +763,7 @@ export const takeAttendance = async (studentId, courseId) => {
     );
     
     if (result.success) {
-      result.message = `✅ Done  (Distance: ${proximityCheck.distance || 'غير محسوبة'} متر)`;
+      result.message = `✅ Attendance recorded successfully (Distance: ${proximityCheck.distance || 'calculated'} meters)`;
     }
     
     return result;
@@ -806,7 +772,7 @@ export const takeAttendance = async (studentId, courseId) => {
     console.error('Error in takeAttendance:', error);
     return { 
       success: false, 
-      message: '❌ Please Try Again' 
+      message: '❌ Please try again' 
     };
   }
 };

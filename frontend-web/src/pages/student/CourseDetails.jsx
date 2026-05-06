@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
@@ -23,34 +23,71 @@ const CourseDetails = () => {
   const [activeSession, setActiveSession] = useState(null);
   const [showLocationPermission, setShowLocationPermission] = useState(false);
   const [locationError, setLocationError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    const loadCourseDetails = async () => {
-      if (!user?.uid || !courseId) {
-        setLoading(false);
-        return;
-      }
+  // دالة تحميل البيانات المركزية (بدون إعادة تحميل الصفحة)
+  const loadCourseDetails = useCallback(async (showRefreshIndicator = false) => {
+    if (!user?.uid || !courseId) {
+      setLoading(false);
+      return;
+    }
 
-      try {
+    try {
+      if (showRefreshIndicator) {
+        setIsRefreshing(true);
+      } else if (loading) {
         setLoading(true);
-        const [courseData, gradeData, session] = await Promise.all([
-          getCourseById(courseId, user.uid),
-          getGradeDetails(user.uid, courseId),
-          checkActiveSession(courseId)
-        ]);
-
-        setCourse(courseData);
-        setGradeDetails(gradeData);
-        setActiveSession(session);
-      } catch (error) {
-        console.error('Error loading course details:', error);
-      } finally {
-        setLoading(false);
       }
-    };
+      
+      const [courseData, gradeData, session] = await Promise.all([
+        getCourseById(courseId, user.uid),
+        getGradeDetails(user.uid, courseId),
+        checkActiveSession(courseId)
+      ]);
 
+      // تحديث البيانات فقط إذا كانت مختلفة
+      let hasChanges = false;
+      
+      if (JSON.stringify(courseData) !== JSON.stringify(course)) {
+        setCourse(courseData);
+        hasChanges = true;
+      }
+      
+      if (JSON.stringify(gradeData) !== JSON.stringify(gradeDetails)) {
+        setGradeDetails(gradeData);
+        hasChanges = true;
+      }
+      
+      if (JSON.stringify(session) !== JSON.stringify(activeSession)) {
+        setActiveSession(session);
+        hasChanges = true;
+      }
+      
+      if (hasChanges) {
+        setLastUpdated(new Date());
+      }
+      
+    } catch (error) {
+      console.error('Error loading course details:', error);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [user?.uid, courseId, course, gradeDetails, activeSession, loading]);
+
+  // تحميل البيانات الأولي وإعداد auto refresh كل 3 ثواني (بدون reload)
+  useEffect(() => {
     loadCourseDetails();
-  }, [user?.uid, courseId]);
+
+    // Auto refresh كل 3 ثواني - يحدث البيانات فقط بدون إعادة تحميل الصفحة
+    const intervalId = setInterval(() => {
+      loadCourseDetails(true);
+    }, 3000);
+
+    // تنظيف الـ interval عند إزالة المكون
+    return () => clearInterval(intervalId);
+  }, [loadCourseDetails]);
 
   const handleTakeAttendance = async () => {
     setAttendanceLoading(true);
@@ -85,9 +122,11 @@ const CourseDetails = () => {
     
     setAttendanceLoading(false);
     
+    // تحديث البيانات فوراً بعد تسجيل الحضور
     if (result.success) {
-      const session = await checkActiveSession(courseId);
-      setActiveSession(session);
+      setTimeout(() => {
+        loadCourseDetails(true);
+      }, 500);
     }
     
     setTimeout(() => {
@@ -120,8 +159,9 @@ const CourseDetails = () => {
     setAttendanceLoading(false);
     
     if (result.success) {
-      const session = await checkActiveSession(courseId);
-      setActiveSession(session);
+      setTimeout(() => {
+        loadCourseDetails(true);
+      }, 500);
     }
     
     setTimeout(() => {
@@ -133,7 +173,7 @@ const CourseDetails = () => {
   const handleLocationDenied = () => {
     setShowLocationPermission(false);
     setAttendanceMessage({
-      text: '⚠️ Approve Location Access And try Again',
+      text: '⚠️ Please approve location access and try again',
       type: 'error'
     });
     setAttendanceLoading(false);
@@ -141,6 +181,26 @@ const CourseDetails = () => {
     setTimeout(() => {
       setAttendanceMessage({ text: '', type: '' });
     }, 3000);
+  };
+
+  // دالة مساعدة لتنسيق التاريخ بشكل صحيح
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Date not available';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
   };
 
   if (loading) {
@@ -164,7 +224,7 @@ const CourseDetails = () => {
     );
   }
 
-  const attendedLectures = course.lectures?.filter(l => l.attended).length || 0;
+  const attendedLectures = course.lectures?.filter(l => l.attended === true).length || 0;
   const totalLectures = course.lectures?.length || 0;
   const attendanceRate = totalLectures > 0 ? ((attendedLectures / totalLectures) * 100).toFixed(1) : 0;
 
@@ -175,6 +235,12 @@ const CourseDetails = () => {
 
   return (
     <PageLayout>
+      {/* مؤشر Auto Refresh في الزاوية */}
+     
+         
+    
+      
+
       {showLocationPermission && (
         <LocationPermission
           onLocationGranted={handleLocationGranted}
@@ -212,7 +278,29 @@ const CourseDetails = () => {
         </div>
       </div>
 
-      {/* قسم تسجيل الحضور */}
+      {/* شريط آخر تحديث */}
+      <div style={{
+        textAlign: 'right',
+        fontSize: '11px',
+        color: '#94a3b8',
+        marginBottom: '12px',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+        <span style={{ 
+          display: 'inline-block',
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          background: '#22c55e',
+          animation: 'pulse 2s infinite'
+        }}></span>
+      </div>
+
+      {/* Attendance Section */}
       <div style={{
         background: '#f8fafc',
         borderRadius: '16px',
@@ -223,14 +311,14 @@ const CourseDetails = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>
-              📝 Take Attendence
+              📝 Take Attendance
             </h3>
             <p style={{ fontSize: '14px', color: '#64748b' }}>
               {activeSession 
                 ? activeSession.attendanceOpen !== false
-                  ? '🟢 There Exist Session Right Now - You Can Take Attendence'
-                  : '🔴 The instructor Closed The Attendence'
-                : '🔴 No Session Right Now'}
+                  ? '🟢 There is an active session right now - You can take attendance'
+                  : '🔴 The instructor closed the attendance'
+                : '🔴 No active session right now'}
             </p>
           </div>
           
@@ -247,14 +335,14 @@ const CourseDetails = () => {
               fontSize: '16px',
               cursor: (activeSession && activeSession.attendanceOpen !== false && !attendanceLoading) ? 'pointer' : 'not-allowed',
               opacity: attendanceLoading ? 0.7 : 1,
-              transitioتسn: 'all 0.2s'
+              transition: 'all 0.2s'
             }}
           >
-            {attendanceLoading ? 'Please Wait..' : '📝 Take Attendence'}
+            {attendanceLoading ? 'Please wait...' : '📝 Take Attendance'}
           </button>
         </div>
         
-        {/* عرض معلومات موقع الجلسة */}
+        {/* Session location information */}
         {activeSession && activeSession.instructorLocation && (
           <div style={{
             marginTop: '16px',
@@ -266,10 +354,10 @@ const CourseDetails = () => {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <span>📍</span>
-              <span style={{ fontWeight: '500' }}>Session Loaction:</span>
+              <span style={{ fontWeight: '500' }}>Session Location:</span>
             </div>
             <div style={{ marginLeft: '28px' }}>
-              <div>You Have to be in instructor Range{activeSession.allowedDistance || 100} Meter From instructor To take Attendence</div>
+              <div>You must be within {activeSession.allowedDistance || 100} meters of the instructor to take attendance</div>
               <button
                 onClick={() => openMapToLocation(
                   activeSession.instructorLocation.latitude, 
@@ -289,13 +377,13 @@ const CourseDetails = () => {
                   gap: '6px'
                 }}
               >
-                <span>🗺️</span> Show instructor Location
+                <span>🗺️</span> Show instructor location
               </button>
             </div>
           </div>
         )}
         
-        {/* عرض رسائل الخطأ/الموقع */}
+        {/* Error/location messages */}
         {locationError && (
           <div style={{
             marginTop: '16px',
@@ -327,13 +415,13 @@ const CourseDetails = () => {
                   gap: '6px'
                 }}
               >
-                <span>🗺️</span> Show instructor Location
+                <span>🗺️</span> Show instructor location
               </button>
             )}
           </div>
         )}
         
-        {/* عرض الرسائل العامة */}
+        {/* General messages */}
         {attendanceMessage.text && !locationError && (
           <div style={{
             marginTop: '16px',
@@ -418,6 +506,9 @@ const CourseDetails = () => {
           <div>
             <div className={styles.statLabel}>Attendance Rate</div>
             <div className={styles.statValue}>{attendanceRate}%</div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+              {attendedLectures} / {totalLectures} lectures
+            </div>
           </div>
         </div>
         <div className={styles.statCard}>
@@ -443,61 +534,97 @@ const CourseDetails = () => {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
         gap: '20px'
       }}>
-        {course.lectures?.map((lec, idx) => (
-          <div key={idx} className={styles.courseCard} style={{ 
-            padding: '20px',
-            borderLeft: lec.attended ? '4px solid #059669' : lec.missed ? '4px solid #dc2626' : '4px solid #94a3b8'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{
-                background: '#e2e8f0',
-                padding: '4px 12px',
-                borderRadius: '30px',
-                fontSize: '13px',
-                fontWeight: 500
-              }}>
-                {lec.type}
-              </span>
-              <span style={{
-                background: lec.attended ? '#d1fae5' : lec.missed ? '#fee2e2' : '#f1f5f9',
-                color: lec.attended ? '#059669' : lec.missed ? '#dc2626' : '#64748b',
-                padding: '4px 12px',
-                borderRadius: '30px',
-                fontSize: '13px',
-                fontWeight: 600
-              }}>
-                {lec.attended ? 'Attended' : lec.missed ? 'Missed' : 'Not Recorded'}
-              </span>
-            </div>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '8px' }}>
-              {lec.topic}
-            </h4>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '14px' }}>
-              <span>📅</span> {new Date(lec.date).toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
-              })}
-            </div>
-            {lec.attendanceOpen === false && (
-              <div style={{
-                marginTop: '8px',
-                padding: '4px 8px',
-                background: '#fef3c7',
-                borderRadius: '6px',
-                fontSize: '11px',
-                color: '#92400e'
-              }}>
-                🔒 Session Closed
+        {course.lectures?.map((lec, idx) => {
+          // تحديد حالة الحضور بشكل صحيح
+          let attendanceStatus = 'Not Recorded';
+          let statusColor = '#64748b';
+          let statusBg = '#f1f5f9';
+          
+          if (lec.attended === true) {
+            attendanceStatus = 'Attended';
+            statusColor = '#059669';
+            statusBg = '#d1fae5';
+          } else if (lec.attended === false || lec.missed === true) {
+            attendanceStatus = 'Missed';
+            statusColor = '#dc2626';
+            statusBg = '#fee2e2';
+          }
+          
+          return (
+            <div key={idx} className={styles.courseCard} style={{ 
+              padding: '20px',
+              borderLeft: lec.attended === true ? '4px solid #059669' : 
+                         (lec.attended === false || lec.missed === true) ? '4px solid #dc2626' : 
+                         '4px solid #94a3b8'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <span style={{
+                  background: '#e2e8f0',
+                  padding: '4px 12px',
+                  borderRadius: '30px',
+                  fontSize: '13px',
+                  fontWeight: 500
+                }}>
+                  {lec.type || 'Lecture'}
+                </span>
+                <span style={{
+                  background: statusBg,
+                  color: statusColor,
+                  padding: '4px 12px',
+                  borderRadius: '30px',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}>
+                  {attendanceStatus}
+                </span>
               </div>
-            )}
-          </div>
-        ))}
+              <h4 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '8px' }}>
+                {lec.topic || 'No topic specified'}
+              </h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '14px' }}>
+                <span>📅</span> 
+                <span>{formatDate(lec.date)}</span>
+              </div>
+              {lec.attendanceOpen === false && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '4px 8px',
+                  background: '#fef3c7',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  color: '#92400e'
+                }}>
+                  🔒 Attendance closed
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {/* CSS animations */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+          0% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.2); }
+          100% { opacity: 0.5; transform: scale(1); }
+        }
+        
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translateX(20px); }
+          10% { opacity: 1; transform: translateX(0); }
+          90% { opacity: 1; transform: translateX(0); }
+          100% { opacity: 0; transform: translateX(20px); }
+        }
+      `}</style>
     </PageLayout>
   );
 };

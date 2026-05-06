@@ -92,7 +92,7 @@ const CoursesPage = () => {
           ))
         ) : (
           <div style={{ textAlign: 'center', padding: '40px', color: '#64748b', gridColumn: '1/-1' }}>
-            No courses
+            No courses available
           </div>
         )}
       </div>

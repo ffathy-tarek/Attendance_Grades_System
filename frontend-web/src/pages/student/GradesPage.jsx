@@ -18,21 +18,29 @@ const GradesPage = () => {
     needingAttention: 0
   });
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    const loadGradesData = async () => {
-      if (!user?.uid) {
-        setLoading(false);
-        return;
-      }
+  // دالة جلب البيانات (مشتقة من الـ useEffect الأصلي)
+  const loadGradesData = async (showNotification = false) => {
+    if (!user?.uid) {
+      setLoading(false);
+      return;
+    }
 
-      try {
-        setLoading(true);
-        const [gradesData, statsData] = await Promise.all([
-          getGradesData(user.uid),
-          getTotalStats(user.uid)
-        ]);
+    try {
+      if (showNotification) setIsRefreshing(true);
+      
+      const [gradesData, statsData] = await Promise.all([
+        getGradesData(user.uid),
+        getTotalStats(user.uid)
+      ]);
 
+      // التحقق إذا كانت البيانات تغيرت فعلاً
+      const gradesChanged = JSON.stringify(gradesData) !== JSON.stringify(grades);
+      const statsChanged = JSON.stringify(statsData) !== JSON.stringify(stats);
+
+      if (gradesChanged || statsChanged) {
         setGrades(gradesData || []);
         setStats(statsData || {
           averageGrade: 0,
@@ -44,16 +52,36 @@ const GradesPage = () => {
           perfectAttendance: 0,
           needingAttention: 0
         });
-      } catch (error) {
-        console.error('Error loading grades:', error);
-      } finally {
-        setLoading(false);
+        setLastUpdated(new Date());
+        
+        // إظهار إشعار عند التحديث (اختياري)
+        if (showNotification && !loading) {
+          // يمكنك إضافة toast notification هنا
+          console.log('Grades updated!');
+        }
       }
-    };
+    } catch (error) {
+      console.error('Error loading grades:', error);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
+  // الـ useEffect الأصلي معدل قليلاً
+  useEffect(() => {
     loadGradesData();
-  }, [user?.uid]);
 
+    // إضافة auto refresh كل 5 ثواني (يمكنك تغيير المدة)
+    const intervalId = setInterval(() => {
+      loadGradesData(true); // true يعني اعرض حالة التحديث
+    }, 5000); // 5000毫秒 = 5 ثواني
+
+    // تنظيف الـ interval عند إزالة المكون
+    return () => clearInterval(intervalId);
+  }, [user?.uid]); // نفس التبعية الأصلية
+
+  // باقي الدوال كما هي بدون تغيير
   const getStatusColor = (status) => {
     switch(status) {
       case 'Excellent': return '#166534';
@@ -94,6 +122,34 @@ const GradesPage = () => {
       subtitle="View your grades and performance"
       actions={
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {/* إضافة زر التحديث اليدوي */}
+          <button 
+            onClick={() => loadGradesData(true)}
+            disabled={isRefreshing}
+            style={{
+              background: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              padding: '8px 16px',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              fontWeight: '500',
+              color: '#0369a1',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: isRefreshing ? 0.6 : 1
+            }}
+          >
+            <span style={{ 
+              display: 'inline-block',
+              animation: isRefreshing ? 'spin 1s linear infinite' : 'none'
+            }}>
+              🔄
+            </span>
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
+          
+          {/* الجزء الأصلي - لم نمسحه */}
           <span style={{ 
             background: '#e0f2fe', 
             padding: '8px 16px', 
@@ -106,6 +162,7 @@ const GradesPage = () => {
         </div>
       }
     >
+      {/* باقي الكود الأصلي كما هو دون تغيير */}
       <div className={styles.tableWrapper}>
         <table className={styles.table}>
           <thead>
@@ -163,6 +220,29 @@ const GradesPage = () => {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* إضافة مؤشر auto refresh في الأسفل (اختياري) */}
+      <div style={{
+        marginTop: '16px',
+        padding: '8px',
+        fontSize: '12px',
+        color: '#64748b',
+        textAlign: 'center',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px'
+      }}>
+        <span style={{
+          display: 'inline-block',
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          background: '#22c55e',
+          animation: 'pulse 2s infinite'
+        }}></span>
+        Auto-refreshing every 5 seconds • Last updated: {lastUpdated.toLocaleTimeString()}
       </div>
 
       {grades.length > 0 && (
@@ -277,11 +357,25 @@ const GradesPage = () => {
               fontSize: '13px',
               color: '#0369a1'
             }}>
-              Last updated: {new Date().toLocaleDateString()}
+              Last updated: {lastUpdated.toLocaleDateString()}
             </div>
           </div>
         </>
       )}
+
+      {/* إضافة الـ CSS animations */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+          0% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.2); }
+          100% { opacity: 0.5; transform: scale(1); }
+        }
+      `}</style>
     </PageLayout>
   );
 };

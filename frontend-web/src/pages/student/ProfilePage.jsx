@@ -14,9 +14,9 @@ const ProfilePage = () => {
     studentId: "Not Available",
   });
 
-  const [originalProfile, setOriginalProfile] = useState({}); // لتخزين البيانات الأصلية
+  const [originalProfile, setOriginalProfile] = useState({});
   const [profileImage, setProfileImage] = useState(null);
-  const [originalProfileImage, setOriginalProfileImage] = useState(null); // الصورة الأصلية
+  const [originalProfileImage, setOriginalProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -52,16 +52,16 @@ const ProfilePage = () => {
           email: data.email || auth.currentUser?.email || "Not Available",
           phone: data.phone || "",
           department: data.department || "Not Available",
-          level: data.academicYear || data.level ? `level ${data.academicYear || data.level}` : "Not Available",
+          level: data.academicYear || data.level ? `Level ${data.academicYear || data.level}` : "Not Available",
           studentId: data.code || data.studentId || "Not Available",
         };
         
         setProfile(profileData);
-        setOriginalProfile(profileData); // حفظ البيانات الأصلية
+        setOriginalProfile(profileData);
         
         if (data.profileImage) {
           setProfileImage(data.profileImage);
-          setOriginalProfileImage(data.profileImage); // حفظ الصورة الأصلية
+          setOriginalProfileImage(data.profileImage);
           setImagePreview(data.profileImage);
         } else {
           setProfileImage(null);
@@ -78,7 +78,6 @@ const ProfilePage = () => {
     }
   };
 
-  // دالة للتحقق مما إذا كان هناك تغييرات
   const hasChanges = () => {
     const phoneChanged = profile.phone !== originalProfile.phone;
     const imageChanged = profileImage !== originalProfileImage;
@@ -100,7 +99,6 @@ const ProfilePage = () => {
         updatedAt: new Date().toISOString()
       });
       
-      // تحديث البيانات الأصلية بعد الحفظ
       setOriginalProfile({ ...profile });
       setOriginalProfileImage(profileImage);
       
@@ -115,7 +113,6 @@ const ProfilePage = () => {
 
   const handleCancel = async () => {
     if (user) {
-      // استعادة البيانات الأصلية
       setProfile({ ...originalProfile });
       setProfileImage(originalProfileImage);
       setImagePreview(originalProfileImage);
@@ -366,7 +363,7 @@ const ProfilePage = () => {
             </div>
           </div>
 
-          {/* الأزرار - Save Button يظهر فقط عند وجود تغييرات */}
+          {/* Buttons - Save button only shows when there are changes */}
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end', paddingTop: '24px', borderTop: '2px solid #f1f5f9' }}>
             {hasChanges() && (
               <button 

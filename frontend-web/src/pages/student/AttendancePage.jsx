@@ -23,7 +23,7 @@ const AttendancePage = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  // دالة لجلب البيانات وتحديثها
+  // Function to load data and update
   const loadAttendanceData = async () => {
     if (!user?.uid) return;
 
@@ -110,7 +110,7 @@ const AttendancePage = () => {
       Present: a.present,
       'Total Lectures': a.total,
       Absences: a.absences,
-      'Absence %': a.absencePercent,  // ✅ نسبة الغياب
+      'Absence %': a.absencePercent,
       Status: a.status
     }));
     
@@ -123,16 +123,16 @@ const AttendancePage = () => {
     loadAttendanceData();
   };
 
-  // ✅ دالة للحصول على لون نسبة الغياب (كلما زادت الغيابات كلما كان اللون أغمق)
+  // Function to get absence percentage color
   const getAbsenceColor = (absencePercent) => {
     const value = parseInt(absencePercent);
-    if (value <= 10) return '#166534';      // غياب قليل → أخضر
-    if (value <= 15) return '#854d0e';      // إنذار أول → برتقالي
-    if (value <= 25) return '#92400e';      // إنذار ثاني → برتقالي غامق
-    return '#991b1b';                       // حرمان → أحمر
+    if (value <= 10) return '#166534';
+    if (value <= 15) return '#854d0e';
+    if (value <= 25) return '#92400e';
+    return '#991b1b';
   };
 
-  // ✅ دالة للحصول على خلفية نسبة الغياب
+  // Function to get absence percentage background
   const getAbsenceBg = (absencePercent) => {
     const value = parseInt(absencePercent);
     if (value <= 10) return '#dcfce7';
@@ -165,13 +165,13 @@ const AttendancePage = () => {
     return (
       <PageLayout title="Attendance" subtitle="Track your attendance records">
         <div style={{ textAlign: 'center', padding: '50px' }}>
-          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading....</div>
+          <div style={{ fontSize: '18px', color: '#64748b' }}>Loading...</div>
         </div>
       </PageLayout>
     );
   }
 
-  // ✅ حساب نسبة الغياب الإجمالية
+  // Calculate total absence percentage
   const totalAbsencePercent = stats.totalLectures > 0 
     ? ((stats.totalAbsences / stats.totalLectures) * 100).toFixed(1)
     : 0;
@@ -237,7 +237,7 @@ const AttendancePage = () => {
         </div>
       }
     >
-      {/* إشعار بالتحديث التلقائي */}
+      {/* Automatic update notification */}
       <div style={{
         background: '#e0f2fe',
         borderRadius: '8px',
@@ -251,14 +251,14 @@ const AttendancePage = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>🔄</span>
-          <span>data updating Automatically</span>
+          <span>Data updating automatically</span>
         </div>
         <div>
-        Last Update: {lastUpdated.toLocaleTimeString()}
+        Last update: {lastUpdated.toLocaleTimeString()}
         </div>
       </div>
 
-      {/* ✅ إحصائيات الغياب بدل الحضور */}
+      {/* Absence statistics instead of attendance */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
@@ -360,7 +360,7 @@ const AttendancePage = () => {
           <tbody>
             {filteredAttendance.length > 0 ? (
               filteredAttendance.map((a, i) => {
-                // ✅ حساب نسبة الغياب لكل مادة
+                // Calculate absence percentage for each subject
                 const absencePercent = a.total > 0 ? ((a.absences / a.total) * 100).toFixed(1) : 0;
                 
                 return (
@@ -436,15 +436,15 @@ const AttendancePage = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#fef9c3', borderRadius: '4px' }}></span>
-            <span>انذار اول (10% - 15% absence)</span>
+            <span>First Warning (10% - 15% absence)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#ffedd5', borderRadius: '4px' }}></span>
-            <span>انذار ثاني (15% - 25% absence)</span>
+            <span>Second Warning (15% - 25% absence)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#fee2e2', borderRadius: '4px' }}></span>
-            <span>حرمان (اكثر من 25% absence)</span>
+            <span>Denied (more than 25% absence)</span>
           </div>
         </div>
         <div style={{ color: '#2563eb', fontWeight: '500' }}>
@@ -456,7 +456,7 @@ const AttendancePage = () => {
 };
 
 const StatsCards = ({ stats }) => {
-  // ✅ حساب نسبة الغياب الإجمالية
+  // Calculate total absence percentage
   const totalAbsencePercent = stats.totalLectures > 0 
     ? ((stats.totalAbsences / stats.totalLectures) * 100).toFixed(1)
     : 0;

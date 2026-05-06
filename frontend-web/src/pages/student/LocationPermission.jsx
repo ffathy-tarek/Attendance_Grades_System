@@ -1,4 +1,3 @@
-// components/LocationPermission.jsx
 import React, { useState, useEffect } from 'react';
 
 const LocationPermission = ({ onLocationGranted, onLocationDenied, onClose }) => {
@@ -12,8 +11,8 @@ const LocationPermission = ({ onLocationGranted, onLocationDenied, onClose }) =>
     
     if (!navigator.geolocation) {
       setPermissionStatus('denied');
-      setError('المتصفح لا يدعم تحديد الموقع');
-      onLocationDenied?.('المتصفح لا يدعم تحديد الموقع');
+      setError('Browser does not support location services');
+      onLocationDenied?.('Browser does not support location services');
       setIsLoading(false);
       return;
     }
@@ -34,16 +33,16 @@ const LocationPermission = ({ onLocationGranted, onLocationDenied, onClose }) =>
         let errorMessage = '';
         switch(error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'يرجى السماح بالوصول إلى الموقع لتسجيل الغياب';
+            errorMessage = 'Please allow location access to record attendance';
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = 'معلومات الموقع غير متوفرة حالياً';
+            errorMessage = 'Location information is currently unavailable';
             break;
           case error.TIMEOUT:
-            errorMessage = 'انتهى وقت محاولة الحصول على الموقع';
+            errorMessage = 'Location request timed out';
             break;
           default:
-            errorMessage = 'حدث خطأ في الحصول على الموقع';
+            errorMessage = 'An error occurred while getting location';
         }
         setError(errorMessage);
         onLocationDenied?.(errorMessage);
@@ -78,9 +77,9 @@ const LocationPermission = ({ onLocationGranted, onLocationDenied, onClose }) =>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
         <span style={{ fontSize: '28px' }}>📍</span>
         <div>
-          <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#0f172a' }}>الموقع مطلوب</h4>
+          <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#0f172a' }}>Location Required</h4>
           <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>
-            لتسجيل الغياب، نحتاج إلى معرفة موقعك الحالي
+            To record attendance, we need your current location
           </p>
         </div>
       </div>
@@ -115,7 +114,7 @@ const LocationPermission = ({ onLocationGranted, onLocationDenied, onClose }) =>
             opacity: isLoading ? 0.7 : 1
           }}
         >
-          {isLoading ? 'جاري الحصول على الموقع...' : 'السماح بالوصول إلى الموقع'}
+          {isLoading ? 'Getting location...' : 'Allow location access'}
         </button>
         
         {onClose && (
@@ -132,7 +131,7 @@ const LocationPermission = ({ onLocationGranted, onLocationDenied, onClose }) =>
               fontSize: '14px'
             }}
           >
-            إغلاق
+            Close
           </button>
         )}
       </div>
