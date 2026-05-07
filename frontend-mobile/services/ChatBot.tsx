@@ -3,7 +3,6 @@ export const askAI = async (userQuestion: string, personalData: any[], stats: an
 
     if (!API_KEY) return "API Key missing!";
 
-    // تأمين البيانات
     const safeData = personalData || [];
     const role = stats?.role || "unknown";
 
@@ -28,10 +27,10 @@ export const askAI = async (userQuestion: string, personalData: any[], stats: an
             
             Strict Academic Rules you must apply:
             1. CALCULATIONS: University quiz scores MUST be divided by 2 before being added to midterm marks. 
-            2. ATTENDANCE: If a student's attendance is below 75% in any subject, they are at risk of exam denial (Herman).
+            2. ATTENDANCE: Calculate student attendance risk based on a total of 24 lectures for the full semester. A student is considered 'At Risk' or 'Banned' only if they miss 6 or more lectures (Attendance below 18/24).
             
             Tasks:
-            - Proactively warn the student if they are near or below the 75% attendance threshold.
+            - Proactively warn the student if they reach the 6-absence threshold.
             - Provide study advice based on their current grades.
             - Help them calculate what they need in the final to pass.
             - Answer briefly and supportively.
@@ -51,7 +50,7 @@ export const askAI = async (userQuestion: string, personalData: any[], stats: an
                     { role: "system", content: systemContext },
                     { role: "user", content: userQuestion || "Hello" }
                 ],
-                temperature: 0.6, // تقليل الـ temperature لزيادة الدقة في الأرقام
+                temperature: 0.6, 
                 max_tokens: 800
             })
         });

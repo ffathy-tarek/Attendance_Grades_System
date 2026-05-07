@@ -91,7 +91,6 @@ export default function CourseDetailsScreen() {
           }));
         setLectures(lecList);
 
-        // Fetch grades - matches instructor's assessmentName: "Midterm", "Final", "Practical"
         const gradeSnap = await getDocs(query(
           collection(db, "grades"),
           where("studentId", "==", user.uid),
@@ -157,11 +156,12 @@ export default function CourseDetailsScreen() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
+  // --- الحسبة الجديدة بناءً على 24 محاضرة للترم ---
+  const totalSemesterLectures = 24; 
   const totalSessions = lectures.length;
   const absences = totalSessions - present;
-  const absPercent = totalSessions > 0 ? ((absences / totalSessions) * 100).toFixed(1) : "0";
+  const absPercent = ((absences / totalSemesterLectures) * 100).toFixed(1);
 
-  // Helper to get score by exact assessmentName (matches instructor's save logic)
   const getGradeScore = (name: string) =>
     grades.find(g => g.assessmentName === name)?.score ?? "—";
 
@@ -217,12 +217,10 @@ export default function CourseDetailsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Grades section - updated to Midterm / Final / Practical */}
         {grades.length > 0 && (
           <View style={s.gradesSection}>
             <Text style={s.sectionTitle}>📊 My Grades</Text>
 
-            {/* Grade breakdown rows matching instructor's categories */}
             {[
               { label: "Midterm", max: 10 },
               { label: "Final", max: 60 },
@@ -243,7 +241,6 @@ export default function CourseDetailsScreen() {
               );
             })}
 
-            {/* Total */}
             <View style={[s.gradeRow, s.totalRow]}>
               <Text style={s.totalLabel}>Total</Text>
               <Text style={s.totalScore}>

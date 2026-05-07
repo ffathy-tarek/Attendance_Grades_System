@@ -54,7 +54,7 @@ export default function InstructorDashboard() {
           const qEnroll = query(collection(db, "enrollments"), where("courseId", "in", courseIds));
           const enrollSnap = await getDocs(qEnroll);
 
-          const totalExpected = enrollSnap.size * lecSnap.size;
+          const totalExpected = enrollSnap.size * 24;
           rate = totalExpected > 0 ? Math.round((attendSnap.size / totalExpected) * 100) : 0;
         }
 
