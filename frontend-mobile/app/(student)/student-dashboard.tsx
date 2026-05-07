@@ -471,6 +471,15 @@ export default function StudentDashboard() {
           })}
         </View>
       </ScrollView>
+
+      {/* زرار الـ AI الجديد للطالب */}
+      <TouchableOpacity
+        style={s.fab}
+        onPress={() => router.push("/ai-chat" as any)}
+      >
+        <Ionicons name="sparkles" size={28} color="white" />
+      </TouchableOpacity>
+
     </SafeAreaView>
   );
 }
@@ -643,4 +652,22 @@ const s = StyleSheet.create({
   // Empty state
   emptyBox: { alignItems: "center", paddingVertical: 40 },
   emptyTxt: { color: "#94a3b8", fontSize: 15, marginTop: 12 },
+
+  // AI FAB Style
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 25,
+    backgroundColor: '#1a3a8a',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+  }
 });

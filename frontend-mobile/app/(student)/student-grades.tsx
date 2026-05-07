@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar } from "react-native";
 import { auth, db } from "../../firebaseConfig";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+// 1. أضفنا onSnapshot هنا
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from "firebase/firestore";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+// --- الـ Interfaces ثابتة زي ما هي ---
 interface Assessment {
   assessmentName: string;
   score: number;
@@ -37,11 +39,18 @@ export default function StudentGrades() {
   const [stats, setStats] = useState<Stats>({ avg: "0", highest: 0, lowest: 0, passed: 0, total: 0 });
 
   useEffect(() => {
-    const load = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
+    const user = auth.currentUser;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
+    // 2. فتحنا "رادار" يراقب كولكشن الدرجات بالكامل للطالب ده
+    const qGrades = query(collection(db, "grades"), where("studentId", "==", user.uid));
+
+    const unsubscribe = onSnapshot(qGrades, async (snapshot) => {
       try {
+        // كل ما درجة تتغير أو تضاف، الكود اللي تحت ده هيتنفذ أوتوماتيك
         const enrollSnap = await getDocs(query(collection(db, "enrollments"), where("studentId", "==", user.uid)));
         const list: CourseGrade[] = [];
 
@@ -50,13 +59,11 @@ export default function StudentGrades() {
           const cDoc = await getDoc(doc(db, "courses", cId));
           if (!cDoc.exists()) continue;
 
-          const gradeSnap = await getDocs(
-            query(collection(db, "grades"), where("studentId", "==", user.uid), where("courseId", "==", cId))
-          );
+          // هنا بنجيب الدرجات اللي تخص المادة دي من الـ snapshot اللي معانا
+          const assessments = snapshot.docs
+            .filter(d => d.data().courseId === cId)
+            .map(d => d.data() as Assessment);
 
-          const assessments = gradeSnap.docs.map(d => d.data() as Assessment);
-
-          // Match exact assessmentName values used by instructor: "Midterm", "Final", "Practical"
           const getScore = (name: string) =>
             assessments.find(a => a.assessmentName === name)?.score || 0;
 
@@ -64,7 +71,6 @@ export default function StudentGrades() {
           const finalG = getScore("Final");
           const practical = getScore("Practical");
 
-          // Total = Midterm (10) + Final (60) + Practical (30) = 100
           const total = midterm + finalG + practical;
 
           const status =
@@ -96,14 +102,17 @@ export default function StudentGrades() {
           });
         }
       } catch (err) {
-        console.error("Grades load error:", err);
+        console.error("Grades live sync error:", err);
       } finally {
         setLoading(false);
       }
-    };
-    load();
+    });
+
+    // 3. تنظيف الـ Listener لما تقفل الصفحة
+    return () => unsubscribe();
   }, []);
 
+  // --- كل ما هو تحت (UI, Styles, Helpers) يظل كما هو تماماً ---
   const getStatusColor = (s: string) =>
     ({ Excellent: "#22c55e", "Very Good": "#3b82f6", Good: "#f59e0b", Pass: "#64748b", Fail: "#ef4444" }[s] || "#94a3b8");
 
@@ -130,7 +139,6 @@ export default function StudentGrades() {
           <GradeStat label="Passed" value={`${stats.passed}/${stats.total}`} icon="🎯" bg="#dcfce7" />
         </View>
 
-        {/* Grading System Legend - updated to match instructor schema */}
         <View style={s.legendBox}>
           <Text style={s.legendTitle}>📝 Grading System</Text>
           <View style={s.legendRow}>

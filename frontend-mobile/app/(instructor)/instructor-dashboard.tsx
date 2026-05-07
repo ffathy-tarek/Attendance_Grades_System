@@ -132,6 +132,15 @@ export default function InstructorDashboard() {
           </View>
         </View>
       </ScrollView>
+
+      {/* زرار الـ AI الجديد */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => router.push("/ai-chat" as any)}
+      >
+        <Ionicons name="sparkles" size={28} color="white" />
+      </TouchableOpacity>
+
     </SafeAreaView>
   );
 }
@@ -175,5 +184,23 @@ const styles = StyleSheet.create({
   actionSub: { fontSize: 11, color: '#7f8c8d', marginTop: 2 },
   actionList: { gap: 12 },
   actionCardListItem: { backgroundColor: '#fff', borderRadius: 15, padding: 18, flexDirection: 'row', alignItems: 'center', elevation: 1 },
-  actionTextList: { color: '#1a3a8a', fontWeight: 'bold', marginLeft: 12, fontSize: 14, flex: 1 }
+  actionTextList: { color: '#1a3a8a', fontWeight: 'bold', marginLeft: 12, fontSize: 14, flex: 1 },
+  
+  // ستايل زرار الـ AI
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 25,
+    backgroundColor: '#1a3a8a',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+  }
 });
