@@ -1,9 +1,12 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { auth } from "../../firebase"; 
 import { signOut } from "firebase/auth";
+import AIChatPopup from "../AIChatPopup";
 
 const StudentSidebar = () => {
   const navigate = useNavigate();
+  const [showAIChat, setShowAIChat] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -40,7 +43,7 @@ const StudentSidebar = () => {
           Profile
         </NavLink>
 
-         <NavLink to="/student/reviews" style={linkStyle}>
+        <NavLink to="/student/reviews" style={linkStyle}>
           Reviews
         </NavLink>
 
@@ -49,10 +52,24 @@ const StudentSidebar = () => {
         </NavLink>
       </nav>
 
-      {/* زرار Logout ثابت في الأسفل */}
+      {/* AI Assistant Button */}
+      <button 
+        onClick={() => setShowAIChat(true)} 
+        style={aiAssistantButtonStyle}
+        title="AI Assistant"
+      >
+        🤖 Segma
+      </button>
+
+      {/* Logout Button */}
       <button onClick={handleLogout} style={logoutButtonStyle}>
         Logout
       </button>
+
+      {/* AI Chat Popup */}
+      {showAIChat && (
+        <AIChatPopup onClose={() => setShowAIChat(false)} />
+      )}
     </div>
   );
 };
@@ -85,6 +102,24 @@ const linkStyle = ({ isActive }) => ({
   transition: "background-color 0.2s",
   cursor: "pointer",
 });
+
+const aiAssistantButtonStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  padding: "12px",
+  marginBottom: "12px",
+  borderRadius: "12px",
+  width: "100%",
+  border: "none",
+  backgroundColor: "#8b5cf6",
+  color: "white",
+  cursor: "pointer",
+  fontSize: "16px",
+  fontWeight: "500",
+  transition: "all 0.2s",
+};
 
 const logoutButtonStyle = {
   padding: "12px",
