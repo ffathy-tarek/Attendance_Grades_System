@@ -37,38 +37,45 @@ export default function StudentAttendance() {
       const list: AttendanceRecord[] = [];
       let totalAll = 0, presentAll = 0;
 
+      // الثابت الجديد: إجمالي محاضرات الترم
+      const totalSemesterLectures = 24;
+
       for (const enr of enrollSnap.docs) {
         const cId = enr.data().courseId;
         const cDoc = await getDoc(doc(db, "courses", cId));
         if (!cDoc.exists()) continue;
 
         const sessSnap = await getDocs(query(collection(db, "lecture_sessions"), where("courseId", "==", cId)));
-        const totalSessions = sessSnap.size;
+        const totalSessionsOccurred = sessSnap.size;
 
         const attendSnap = await getDocs(
           query(collection(db, "attendance"), where("studentId", "==", userId), where("courseId", "==", cId))
         );
         
         const presentCount = attendSnap.size;
-        const absences = totalSessions - presentCount;
-        const absPercentNum = totalSessions > 0 ? (absences / totalSessions) * 100 : 0;
+        const absences = totalSessionsOccurred - presentCount;
+        
+        // الحسبة الجديدة: القسمة على 24 دايماً
+        const absPercentNum = (absences / totalSemesterLectures) * 100;
 
+        // تحديث منطق الحالات ليتوافق مع الـ 24 محاضرة والـ Instructor side
         let status: AttendanceRecord["status"] = "Perfect";
-        if (absPercentNum > 25) status = "Barred";
-        else if (absPercentNum === 25) status = "2nd Warning";
-        else if (absPercentNum >= 15) status = "1st Warning";
+        if (absPercentNum >= 25) status = "Barred"; // 6 غيابات فأكثر
+        else if (absPercentNum >= 20) status = "2nd Warning"; // 5 غيابات
+        else if (absPercentNum >= 10) status = "1st Warning"; // 3 غيابات فأكثر
+       
 
         list.push({
           id: cId,
           subject: cDoc.data().name || cDoc.data().courseName || "Unknown",
           present: presentCount,
           absences,
-          total: totalSessions,
+          total: totalSessionsOccurred, // عدد المحاضرات التي تمت فعلياً للعرض فقط
           absPercent: absPercentNum.toFixed(1),
           status,
         });
         
-        totalAll += totalSessions;
+        totalAll += totalSemesterLectures;
         presentAll += presentCount;
       }
 
@@ -131,9 +138,9 @@ export default function StudentAttendance() {
       </View>
 
       <View style={s.summaryRow}>
-        <SumBox label="Total" value={stats.total} color="#1a3a8a" />
-        <SumBox label="Present" value={stats.present} color="#22c55e" />
-        <SumBox label="Absent" value={stats.absent} color="#ef4444" />
+        <SumBox label="Total Target" value={stats.total} color="#1a3a8a" />
+        <SumBox label="My Present" value={stats.present} color="#22c55e" />
+        <SumBox label="Abs Count" value={stats.absent} color="#ef4444" />
         <SumBox label="Abs Rate" value={`${stats.absPercent}%`} color="#f59e0b" />
       </View>
 
@@ -162,7 +169,7 @@ export default function StudentAttendance() {
               <View style={s.statsChips}>
                 <Text style={[s.chip, { color: "#22c55e" }]}>✅ {item.present}</Text>
                 <Text style={[s.chip, { color: "#ef4444" }]}>❌ {item.absences}</Text>
-                <Text style={s.chip}>📅 {item.total} sessions</Text>
+                <Text style={s.chip}>📅 {item.total} sessions occurred</Text>
               </View>
             </View>
             <View style={{ alignItems: "flex-end", gap: 6 }}>
@@ -179,10 +186,10 @@ export default function StudentAttendance() {
 
       <View style={s.legend}>
         {[
-          { bg: "#dcfce7", l: "Perfect (0%)" },
-          { bg: "#fef9c3", l: "1st Warn (15%++)" },
-          { bg: "#fee2e2", l: "2nd Warn (25%++)" },
-          { bg: "#fecaca", l: "Barred (>25%)" }
+          { bg: "#dcfce7", l: "Perfect (0-2 Absences)" },
+          { bg: "#fef9c3", l: "1st Warn (3+ Absences)" },
+          { bg: "#fee2e2", l: "2nd Warn (5 Absences)" },
+          { bg: "#fecaca", l: "Barred (6+ Absences)" }
         ].map((item) => (
           <View key={item.l} style={s.legendItem}>
             <View style={[s.dot, { backgroundColor: item.bg }]} />

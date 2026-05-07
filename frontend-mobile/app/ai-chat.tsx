@@ -31,7 +31,7 @@ export default function AIChatScreen() {
 
           const report = await Promise.all(coursesSnap.docs.map(async (cDoc) => {
             const courseId = cDoc.id;
-            const enrollSnap = await getDocs(query(collection(db, "courseId", "==", courseId)));
+            const enrollSnap = await getDocs(query(collection(db, "enrollments"), where("courseId", "==", courseId)));
             
             const studentDetails = await Promise.all(enrollSnap.docs.map(async (enr) => {
               const sId = enr.data().studentId;
@@ -61,17 +61,25 @@ export default function AIChatScreen() {
               getDocs(query(collection(db, "attendance"), where("studentId", "==", user.uid), where("courseId", "==", cId))),
               getDocs(query(collection(db, "lecture_sessions"), where("courseId", "==", cId)))
             ]);
-            const totalSessions = sSnap.size;
+            
+            // --- التعديل الجديد هنا ---
+            const totalSessionsOccurred = sSnap.size;
             const present = aSnap.size;
+            const absent = totalSessionsOccurred - present;
+            const totalSemesterLectures = 24; 
+
             return {
               courseName: cDoc.data()?.name || "Unknown",
               grades: gSnap.docs.map(g => ({ type: g.data().assessmentName, score: g.data().score })),
               attendance: {
                 present,
-                total: totalSessions,
-                percent: totalSessions > 0 ? Math.round((present / totalSessions) * 100) : 0
+                absent,
+                totalOccurred: totalSessionsOccurred,
+                totalSemester: totalSemesterLectures,
+                percent: Math.round((present / totalSemesterLectures) * 100)
               }
             };
+            // ------------------------
           }));
           setPersonalData(report);
           setPersonalStats({ role: 'student' });
@@ -105,15 +113,10 @@ export default function AIChatScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
         
         <View style={styles.header}>
-          {/* زرار الرجوع الرمادي */}
           <TouchableOpacity onPress={() => router.back()} style={styles.headerBackActionButton}>
             <Ionicons name="arrow-back" size={24} color="#1a3a8a" />
           </TouchableOpacity>
-          
-          {/* العنوان في النص */}
           <Text style={styles.headerTitle}>Academic Assistant</Text>
-          
-          {/* مساحة فاضية مكان الزرار عشان العنوان يفضل في النص */}
           <View style={{ width: 42 }} />
         </View>
 
@@ -157,7 +160,6 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0'
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -169,7 +171,6 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0',
     paddingTop: Platform.OS === 'ios' ? 10 : 15, 
   },
-  
   headerBackActionButton: {
     width: 42,
     height: 42,
@@ -178,7 +179,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -186,7 +186,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
-
   bubble: { padding: 12, borderRadius: 16, marginBottom: 10, maxWidth: '85%' },
   userBubble: { alignSelf: 'flex-end', backgroundColor: '#1a3a8a', borderBottomRightRadius: 2 },
   aiBubble: { alignSelf: 'flex-start', backgroundColor: '#e2e8f0', borderBottomLeftRadius: 2 },

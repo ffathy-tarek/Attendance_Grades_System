@@ -28,11 +28,10 @@ export default function StudentList() {
     fetchInstructorCourses();
   }, []);
 
-  // دالة تحديد الإنذار حسب نسب الـ PDF (Sprint 6)
   const getWarningStatus = (absenceRate: number) => {
-    if (absenceRate >= 25) return { label: "⛔ DENIED (25%)", color: "#ef4444" }; // حرمان
-    if (absenceRate >= 20) return { label: "⚠️ WARNING (20%)", color: "#f97316" }; // إنذار ثاني
-    if (absenceRate >= 10) return { label: "📢 NOTICE (10%)", color: "#eab308" }; // إنذار أول
+    if (absenceRate >= 25) return { label: "⛔ DENIED (25%)", color: "#ef4444" }; 
+    if (absenceRate >= 20) return { label: "⚠️ WARNING (20%)", color: "#f97316" }; 
+    if (absenceRate >= 10) return { label: "📢 NOTICE (10%)", color: "#eab308" }; 
     return null;
   };
 
@@ -40,14 +39,15 @@ export default function StudentList() {
     setLoading(true);
     setSelectedCourse(course);
     try {
-      // 1. جلب الطلاب المسجلين
       const qEnroll = query(collection(db, "enrollments"), where("courseId", "==", course.id));
       const enrollSnap = await getDocs(qEnroll);
       
-      // 2. جلب إجمالي المحاضرات التي تمت للمادة
       const qLectures = query(collection(db, "lecture_sessions"), where("courseId", "==", course.id));
       const lectureSnap = await getDocs(qLectures);
-      const totalSessions = lectureSnap.size;
+      const totalSessionsOccurred = lectureSnap.size;
+
+      // الثابت الجديد: إجمالي محاضرات الترم
+      const totalSemesterLectures = 24; 
 
       const studentDataList = [];
       for (const enrDoc of enrollSnap.docs) {
@@ -55,19 +55,19 @@ export default function StudentList() {
         const uDoc = await getDoc(doc(db, "users", sId));
         const fullName = uDoc.exists() ? uDoc.data().fullName : "Unknown";
 
-        // 3. جلب عدد مرات حضور الطالب
         const qAttend = query(collection(db, "attendance"), 
           where("studentId", "==", sId), 
           where("courseId", "==", course.id)
         );
         const attendSnap = await getDocs(qAttend);
         const presenceCount = attendSnap.size;
-        const absenceCount = totalSessions - presenceCount;
+        
+        // عدد الغيابات من اللي فات فعلياً
+        const absenceCount = totalSessionsOccurred - presenceCount;
 
-        // 4. حساب نسبة الغياب (Sprint 6 Logic)
-        const absencePercentage = totalSessions > 0 ? (absenceCount / totalSessions) * 100 : 0;
+        // الحسبة الجديدة: القسمة على 24 دايماً
+        const absencePercentage = (absenceCount / totalSemesterLectures) * 100;
 
-        // 5. جلب الدرجة (من سبرينت 5)
         const qGrade = query(collection(db, "grades"), 
           where("studentId", "==", sId), 
           where("courseId", "==", course.id)

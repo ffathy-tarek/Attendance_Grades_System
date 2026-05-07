@@ -139,7 +139,10 @@ export default function StudentDashboard() {
         );
         const present = attendSnap.size;
         const absences = totalSessions - present;
-        const absPercent = totalSessions > 0 ? (absences / totalSessions) * 100 : 0;
+
+        // --- التعديل هنا: الحسبة بناءً على إجمالي 24 محاضرة للترم ---
+        const totalSemesterLectures = 24;
+        const absPercent = (absences / totalSemesterLectures) * 100;
 
         totalAbsPercent += absPercent;
         if (absPercent === 0) perfect++;
@@ -273,9 +276,10 @@ export default function StudentDashboard() {
   };
 
   const getWarning = (p: number): string => {
-    if (p > 25) return "🚫 Barred from exam";
-    if (p >= 25) return "⚠️ 2nd Warning";
-    if (p >= 15) return "⚠️ 1st Warning";
+    // --- تحديث الرسائل لتتوافق مع الـ 24 محاضرة ---
+    if (p >= 25) return "🚫 Barred from exam (6+ Absences)"; 
+    if (p >= 20) return "⚠️ 2nd Warning (5 Absences)";
+    if (p >= 15) return "⚠️ 1st Warning (4 Absences)";
     return "";
   };
 
