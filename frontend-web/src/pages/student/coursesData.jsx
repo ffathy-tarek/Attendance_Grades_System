@@ -281,26 +281,25 @@ export const getAttendanceData = async (studentId) => {
         );
         const sessionsSnapshot = await getDocs(sessionsQuery);
         
-        const totalLectures = sessionsSnapshot.size;
+        const TOTAL_TERM_LECTURES = 24;
+        const actualSessions = sessionsSnapshot.size;
         const presentCount = presentByCourse[courseId] || 0;
-        const absencesCount = totalLectures - presentCount;
+        const absencesCount = actualSessions - presentCount;
         
-        const absencePercent = totalLectures > 0 
-          ? ((absencesCount / totalLectures) * 100).toFixed(1)
-          : 0;
+        const absencePercent = ((absencesCount / TOTAL_TERM_LECTURES) * 100).toFixed(1);
         
         let status = 'Regular';
         const absenceValue = parseFloat(absencePercent);
         if (absencesCount === 0) status = 'Perfect';
-        else if (absenceValue > 25) status = 'Denied';
-        else if (absenceValue === 25) status = 'Second warning';
-        else if (absenceValue >= 15) status = 'First warning';
+        else if (absenceValue >= 25) status = 'Denied';
+        else if (absenceValue >= 20) status = 'Second warning';
+        else if (absenceValue >= 10) status = 'First warning';
         
         coursesList.push({
           id: courseId,
           subject: courseData.name || 'Unknown Course',
           present: presentCount,
-          total: totalLectures,
+          total: TOTAL_TERM_LECTURES,
           absences: absencesCount,
           absencePercent: parseFloat(absencePercent),
           status: status,

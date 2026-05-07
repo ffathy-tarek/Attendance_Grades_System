@@ -236,8 +236,8 @@ const CourseDetails = () => {
   return (
     <PageLayout>
       {/* مؤشر Auto Refresh في الزاوية */}
-     
-         
+   
+        
     
       
 
