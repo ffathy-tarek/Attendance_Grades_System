@@ -3,9 +3,6 @@ import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
 import { getGradesData, getTotalStats } from './coursesData';
 import { useAuth } from '../../context/AuthContext';
-// 1. استيراد أدوات الفايربيز للتحويل للوضع اللايف
-import { db } from "../../firebase";
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 const GradesPage = () => {
   const { user } = useAuth();
@@ -24,18 +21,13 @@ const GradesPage = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-<<<<<<< Updated upstream
   // دالة جلب البيانات (مشتقة من الـ useEffect الأصلي)
   const loadGradesData = async (showNotification = false) => {
-=======
-  useEffect(() => {
->>>>>>> Stashed changes
     if (!user?.uid) {
       setLoading(false);
       return;
     }
 
-<<<<<<< Updated upstream
     try {
       if (showNotification) setIsRefreshing(true);
       
@@ -43,24 +35,6 @@ const GradesPage = () => {
         getGradesData(user.uid),
         getTotalStats(user.uid)
       ]);
-=======
-    setLoading(true);
-
-    // 2. إعداد الـ Query لمراقبة درجات الطالب الحالي
-    const q = query(
-      collection(db, "grades"), 
-      where("studentId", "==", user.uid)
-    );
-
-    // 3. فتح الـ Real-time Listener
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      try {
-        // أول ما يحصل أي تغيير (إضافة/تعديل)، هننادي الدوال بتاعتك تجيب البيانات المحدثة
-        const [gradesData, statsData] = await Promise.all([
-          getGradesData(user.uid),
-          getTotalStats(user.uid)
-        ]);
->>>>>>> Stashed changes
 
       // التحقق إذا كانت البيانات تغيرت فعلاً
       const gradesChanged = JSON.stringify(gradesData) !== JSON.stringify(grades);
@@ -69,11 +43,15 @@ const GradesPage = () => {
       if (gradesChanged || statsChanged) {
         setGrades(gradesData || []);
         setStats(statsData || {
-          averageGrade: 0, totalCourses: 0, totalLectures: 0,
-          totalPresent: 0, totalAbsences: 0, averageAttendance: 0,
-          perfectAttendance: 0, needingAttention: 0
+          averageGrade: 0,
+          totalCourses: 0,
+          totalLectures: 0,
+          totalPresent: 0,
+          totalAbsences: 0,
+          averageAttendance: 0,
+          perfectAttendance: 0,
+          needingAttention: 0
         });
-<<<<<<< Updated upstream
         setLastUpdated(new Date());
         
         // إظهار إشعار عند التحديث (اختياري)
@@ -104,20 +82,6 @@ const GradesPage = () => {
   }, [user?.uid]); // نفس التبعية الأصلية
 
   // باقي الدوال كما هي بدون تغيير
-=======
-      } catch (error) {
-        console.error('Error updating live grades:', error);
-      } finally {
-        setLoading(false);
-      }
-    });
-
-    // 4. تنظيف الـ Listener عند الخروج من الصفحة
-    return () => unsubscribe();
-  }, [user?.uid]);
-
-  // --- باقي كود getStatusColor و getStatusBg والـ UI كما هو تماماً دون تغيير ---
->>>>>>> Stashed changes
   const getStatusColor = (status) => {
     switch(status) {
       case 'Excellent': return '#166534';
