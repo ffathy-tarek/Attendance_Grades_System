@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import PageLayout from '../../components/student/PageLayout';
 import styles from '../../components/student/PageLayout.module.css';
 import { useAuth } from '../../context/AuthContext';
@@ -25,6 +25,10 @@ const InstructorProfile = () => {
     lecturesCount: 0,
     avgAttendance: 0
   });
+  const [profileImage, setProfileImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [originalProfileImage, setOriginalProfileImage] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const loadProfileData = async () => {
@@ -98,6 +102,12 @@ const InstructorProfile = () => {
           lecturesCount: lecturesCount,
           avgAttendance: avgAttendance
         });
+
+        if (userData?.profileImage) {
+          setProfileImage(userData.profileImage);
+          setOriginalProfileImage(userData.profileImage);
+          setImagePreview(userData.profileImage);
+        }
         
       } catch (error) {
         console.error('Error loading profile:', error);
@@ -118,11 +128,9 @@ const InstructorProfile = () => {
     try {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
-        fullName: profile.fullName,
-        department: profile.department,
         phone: profile.phone,
-        office: profile.office,
-        title: profile.title,
+        department: profile.department,
+        profileImage: profileImage || null,
         updatedAt: new Date()
       });
       
@@ -134,6 +142,31 @@ const InstructorProfile = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.match('image.*')) {
+      alert('Please select an image file');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image size should be less than 2MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfileImage(reader.result);
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    setProfileImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleChange = (field, value) => {
@@ -248,15 +281,59 @@ const InstructorProfile = () => {
           <h3 style={{ marginBottom: '24px', fontSize: '18px', fontWeight: '600', color: '#0f172a' }}>
             Personal Information
           </h3>
+
+          {/* Profile Image Upload */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            style={{ display: 'none' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '28px', padding: '20px', background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+            <div
+              style={{ width: '90px', height: '90px', borderRadius: '50%', overflow: 'hidden', border: '3px solid white', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', cursor: 'pointer', flexShrink: 0 }}
+              onClick={() => fileInputRef.current.click()}
+            >
+              {imagePreview ? (
+                <img src={imagePreview} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>
+                  {profile.fullName?.split(' ').map(n => n[0]).join('').slice(0,2) || '👤'}
+                </div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontWeight: '600', color: '#0f172a', marginBottom: '4px' }}>{profile.fullName}</div>
+              <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>{profile.title} • {profile.department}</div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => fileInputRef.current.click()}
+                  style={{ padding: '6px 16px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}
+                >
+                  📷 Upload Photo
+                </button>
+                {imagePreview && (
+                  <button
+                    onClick={handleRemovePhoto}
+                    style={{ padding: '6px 16px', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>JPG, PNG (max 2MB)</div>
+            </div>
+          </div>
           
           <div className={styles.formGrid}>
             <div className={styles.formGroup}>
               <label>Full Name</label>
               <input 
                 type="text" 
-                className={styles.input}
+                className={`${styles.input} ${styles.inputDisabled}`}
                 value={profile.fullName}
-                onChange={(e) => handleChange('fullName', e.target.value)}
+                disabled
               />
             </div>
             
@@ -284,9 +361,9 @@ const InstructorProfile = () => {
               <label>Title / Position</label>
               <input 
                 type="text" 
-                className={styles.input}
+                className={`${styles.input} ${styles.inputDisabled}`}
                 value={profile.title}
-                onChange={(e) => handleChange('title', e.target.value)}
+                disabled
               />
             </div>
             
@@ -305,10 +382,9 @@ const InstructorProfile = () => {
               <label>Office / Room</label>
               <input 
                 type="text" 
-                className={styles.input}
+                className={`${styles.input} ${styles.inputDisabled}`}
                 value={profile.office}
-                onChange={(e) => handleChange('office', e.target.value)}
-                placeholder="Building A, Room 101"
+                disabled
               />
             </div>
           </div>

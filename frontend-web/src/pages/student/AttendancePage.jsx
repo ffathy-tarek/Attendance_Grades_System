@@ -125,19 +125,19 @@ const AttendancePage = () => {
 
   // Function to get absence percentage color
   const getAbsenceColor = (absencePercent) => {
-    const value = parseInt(absencePercent);
-    if (value <= 10) return '#166534';
-    if (value <= 15) return '#854d0e';
-    if (value <= 25) return '#92400e';
+    const value = parseFloat(absencePercent);
+    if (value < 10) return '#166534';
+    if (value < 20) return '#854d0e';
+    if (value < 25) return '#92400e';
     return '#991b1b';
   };
 
   // Function to get absence percentage background
   const getAbsenceBg = (absencePercent) => {
-    const value = parseInt(absencePercent);
-    if (value <= 10) return '#dcfce7';
-    if (value <= 15) return '#fef9c3';
-    if (value <= 25) return '#ffedd5';
+    const value = parseFloat(absencePercent);
+    if (value < 10) return '#dcfce7';
+    if (value < 20) return '#fef9c3';
+    if (value < 25) return '#ffedd5';
     return '#fee2e2';
   };
 
@@ -432,19 +432,19 @@ const AttendancePage = () => {
         <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#dcfce7', borderRadius: '4px' }}></span>
-            <span>Perfect (0% absence)</span>
+            <span>Regular / Perfect (below 10% absence)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#fef9c3', borderRadius: '4px' }}></span>
-            <span>First Warning (10% - 15% absence)</span>
+            <span>First Warning (10% - 19% absence)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#ffedd5', borderRadius: '4px' }}></span>
-            <span>Second Warning (15% - 25% absence)</span>
+            <span>Second Warning (20% - 24% absence)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ width: '12px', height: '12px', background: '#fee2e2', borderRadius: '4px' }}></span>
-            <span>Denied (more than 25% absence)</span>
+            <span>Denied (25% absence or more)</span>
           </div>
         </div>
         <div style={{ color: '#2563eb', fontWeight: '500' }}>
