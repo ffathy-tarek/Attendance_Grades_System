@@ -8,7 +8,7 @@ import ForgetPassword from "../pages/ForgetPassword.jsx";
 import RequestEmail from "../pages/RequestEmail.jsx";
 
 /* ===== Admin Pages ===== */
-import Layout from "../components/layout/Layout.jsx";
+import Layout from "../components/layout/layout.jsx";
 import AdminDashboard from "../pages/admin/AdminDashboard.jsx";
 import Students from "../pages/admin/Students.jsx";
 import Instructors from "../pages/admin/Instructors.jsx";
@@ -25,7 +25,7 @@ import CoursesPage from "../pages/student/CoursesPage.jsx";
 import CourseDetails from "../pages/student/CourseDetails.jsx";
 import ProfilePage from "../pages/student/ProfilePage.jsx";
 import ResetPassword from "../pages/student/ResetPassword.jsx";
-import ReviewsPage from '../pages/student/ReviewsPage';
+import ReviewsPage from "../pages/student/ReviewsPage";
 
 /* ===== Instructor Pages ===== */
 import InstructorLayout from "../components/instructor/InstructorLayout";
