@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, Platform, TextInput, Alert, Image } from "react-native";
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, Platform, TextInput, Alert } from "react-native";
 import { auth, db } from "../../firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from 'expo-image-picker';
 
+// 
 interface UserProfileData {
   fullName?: string;
   email?: string;
@@ -15,22 +14,18 @@ interface UserProfileData {
   academicYear?: string | number;
   role?: string;
   phone?: string;
-  photoURL?: string; 
 }
 
 export default function StudentProfile() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false); 
   
+  // 
   const [userData, setUserData] = useState<UserProfileData | null>(null);
   
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
-  const [showPassSection, setShowPassSection] = useState(false);
-  const [currentPass, setCurrentPass] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [confirmPass, setConfirmPass] = useState("");
+
 
   useEffect(() => {
     const load = async () => {
@@ -45,72 +40,13 @@ export default function StudentProfile() {
           setPhone(d.phone || "");
         }
       } catch (e) {
-        console.error(e);
+        console.error("Load error:", e);
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [router]);
-
-  const handleAvatarPress = () => {
-    if (Platform.OS === 'web') {
-      const choice = window.confirm("OK to choose a new photo, or Cancel to remove the current one.");
-      if (choice) {
-        pickImage();
-      } else {
-        const confirmRemove = window.confirm("Remove photo?");
-        if (confirmRemove) removeImage();
-      }
-    } else {
-      Alert.alert(
-        "Profile Picture",
-        "Select an option",
-        [
-          { text: "Choose from Library", onPress: pickImage },
-          { text: "Remove Photo", onPress: removeImage, style: "destructive" },
-          { text: "Cancel", style: "cancel" }
-        ]
-      );
-    }
-  };
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
-
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
-
-    if (!result.canceled) {
-      updateProfileImage(result.assets[0].uri);
-    }
-  };
-
-  const removeImage = async () => {
-    updateProfileImage(null);
-  };
-
-  const updateProfileImage = async (uri: string | null) => {
-    setUploading(true);
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      await updateDoc(doc(db, "users", user.uid), {
-        photoURL: uri
-      });
-      setUserData({ ...userData, photoURL: uri } as UserProfileData);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setUploading(false);
-    }
-  };
+  }, [router]); // 
 
   const handleSave = async () => {
     const user = auth.currentUser;
@@ -128,25 +64,6 @@ export default function StudentProfile() {
     setSaving(false);
   };
 
-  const handleChangePassword = async () => {
-    if (newPass !== confirmPass) return Alert.alert("Error", "Passwords don't match");
-    if (newPass.length < 6) return Alert.alert("Error", "Password must be at least 6 characters");
-    
-    const user = auth.currentUser;
-    if (!user?.email) return;
-
-    try {
-      const cred = EmailAuthProvider.credential(user.email, currentPass);
-      await reauthenticateWithCredential(user, cred);
-      await updatePassword(user, newPass);
-      Alert.alert("Success", "Password changed ✅");
-      setShowPassSection(false);
-      setCurrentPass(""); setNewPass(""); setConfirmPass("");
-    } catch (e: any) { 
-      Alert.alert("Error", e.message); 
-    }
-  };
-
   if (loading) return <View style={s.center}><ActivityIndicator size="large" color="#1a3a8a" /></View>;
 
   return (
@@ -162,22 +79,9 @@ export default function StudentProfile() {
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         <View style={s.avatarSection}>
-          
-          <TouchableOpacity onPress={handleAvatarPress} disabled={uploading} style={s.avatarWrapper}>
-            <View style={s.avatarCircle}>
-              {uploading ? (
-                <ActivityIndicator color="#fff" />
-              ) : userData?.photoURL ? (
-                <Image source={{ uri: userData.photoURL }} style={s.avatarImage} />
-              ) : (
-                <Text style={s.avatarLetter}>{userData?.fullName?.charAt(0)?.toUpperCase() || "S"}</Text>
-              )}
-            </View>
-            <View style={s.cameraIconBadge}>
-              <Ionicons name="camera" size={18} color="#fff" />
-            </View>
-          </TouchableOpacity>
-          
+          <View style={s.avatar}>
+            <Text style={s.avatarLetter}>{userData?.fullName?.charAt(0)?.toUpperCase() || "S"}</Text>
+          </View>
           <Text style={s.name}>{userData?.fullName || "Student"}</Text>
           <Text style={s.email}>{userData?.email || auth.currentUser?.email}</Text>
           {userData?.code ? (
@@ -212,22 +116,11 @@ export default function StudentProfile() {
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnTxt}>Save Changes</Text>}
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.passwordToggle} onPress={() => setShowPassSection(!showPassSection)}>
+        <TouchableOpacity style={s.passwordToggle} onPress={() => router.push("/reset-password" as any)}>
           <Ionicons name="lock-closed-outline" size={20} color="#1a3a8a" />
           <Text style={s.passwordToggleTxt}>Change Password 🔐</Text>
-          <Ionicons name={showPassSection ? "chevron-up" : "chevron-down"} size={18} color="#1a3a8a" />
+          <Ionicons name="chevron-forward" size={18} color="#1a3a8a" />
         </TouchableOpacity>
-
-        {showPassSection && (
-          <View style={s.passCard}>
-            <PassInput label="Current Password" value={currentPass} onChange={setCurrentPass} />
-            <PassInput label="New Password" value={newPass} onChange={setNewPass} />
-            <PassInput label="Confirm New Password" value={confirmPass} onChange={setConfirmPass} />
-            <TouchableOpacity style={s.saveBtn} onPress={handleChangePassword}>
-              <Text style={s.saveBtnTxt}>Update Password</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         <TouchableOpacity style={s.logoutBtn} onPress={() => auth.signOut().then(() => router.replace("/"))}>
           <Ionicons name="log-out-outline" size={20} color="#ef4444" />
@@ -238,6 +131,7 @@ export default function StudentProfile() {
   );
 }
 
+//
 interface InfoRowProps {
   icon: any;
   label: string;
@@ -257,13 +151,6 @@ const InfoRow = ({ icon, label, value, editable, children, last }: InfoRowProps)
   </View>
 );
 
-const PassInput = ({ label, value, onChange }: { label: string, value: string, onChange: (t: string) => void }) => (
-  <View style={{ marginBottom: 12 }}>
-    <Text style={s.infoLabel}>{label}</Text>
-    <TextInput style={s.passInput} secureTextEntry value={value} onChangeText={onChange} placeholder="••••••••" />
-  </View>
-);
-
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f5f7fa" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -271,37 +158,8 @@ const s = StyleSheet.create({
   backBtn: { padding: 8, backgroundColor: "#f1f5f9", borderRadius: 12 },
   headerTitle: { fontSize: 18, fontWeight: "bold", color: "#1e293b" },
   avatarSection: { alignItems: "center", marginBottom: 24 },
-  
-  avatarWrapper: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  avatarCircle: { 
-    width: 90, 
-    height: 90, 
-    borderRadius: 45, 
-    backgroundColor: "#1a3a8a", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    elevation: 4,
-    overflow: 'hidden',
-  },
-  avatarImage: { width: '100%', height: '100%' },
+  avatar: { width: 90, height: 90, borderRadius: 45, backgroundColor: "#1a3a8a", justifyContent: "center", alignItems: "center", elevation: 4, marginBottom: 12 },
   avatarLetter: { color: "#fff", fontSize: 36, fontWeight: "bold" },
-  cameraIconBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#1a3a8a',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#f5f7fa',
-  },
-  
   name: { fontSize: 20, fontWeight: "bold", color: "#1e293b" },
   email: { fontSize: 13, color: "#64748b", marginTop: 3 },
   idBadge: { marginTop: 8, backgroundColor: "#eef6ff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
@@ -316,8 +174,6 @@ const s = StyleSheet.create({
   saveBtnTxt: { color: "#fff", fontWeight: "bold", fontSize: 15 },
   passwordToggle: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, elevation: 1, borderWidth: 1, borderColor: "#e2e8f0" },
   passwordToggleTxt: { flex: 1, marginLeft: 10, fontWeight: "bold", color: "#1a3a8a" },
-  passCard: { backgroundColor: "#fff", borderRadius: 18, padding: 18, marginBottom: 12, elevation: 1 },
-  passInput: { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, padding: 12, fontSize: 14 },
   logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#fff", borderRadius: 14, padding: 16, borderWidth: 1, borderColor: "#fee2e2", gap: 8 },
   logoutTxt: { color: "#ef4444", fontWeight: "bold", fontSize: 15 },
 });

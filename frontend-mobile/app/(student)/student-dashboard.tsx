@@ -139,10 +139,7 @@ export default function StudentDashboard() {
         );
         const present = attendSnap.size;
         const absences = totalSessions - present;
-
-        // --- التعديل هنا: الحسبة بناءً على إجمالي 24 محاضرة للترم ---
-        const totalSemesterLectures = 24;
-        const absPercent = (absences / totalSemesterLectures) * 100;
+        const absPercent = totalSessions > 0 ? (absences / totalSessions) * 100 : 0;
 
         totalAbsPercent += absPercent;
         if (absPercent === 0) perfect++;
@@ -276,10 +273,9 @@ export default function StudentDashboard() {
   };
 
   const getWarning = (p: number): string => {
-    // --- تحديث الرسائل لتتوافق مع الـ 24 محاضرة ---
-    if (p >= 25) return "🚫 Barred from exam (6+ Absences)"; 
-    if (p >= 20) return "⚠️ 2nd Warning (5 Absences)";
-    if (p >= 15) return "⚠️ 1st Warning (4 Absences)";
+    if (p > 25) return "🚫 Barred from exam";
+    if (p >= 25) return "⚠️ 2nd Warning";
+    if (p >= 15) return "⚠️ 1st Warning";
     return "";
   };
 
@@ -360,14 +356,6 @@ export default function StudentDashboard() {
               color="#f59e0b"
               onPress={() => router.push("/(student)/student-courses"as any)}
             />
-            <QuickBtn
-              icon="person-outline"
-              label="Profile"
-              color="#a855f7"
-              onPress={() => router.push("/(student)/student-profile" as any)}
-            />
-          </View>
-          <View style={s.quickRow}>
             <QuickBtn
               icon="star-outline"
               label="Reviews"
@@ -475,15 +463,6 @@ export default function StudentDashboard() {
           })}
         </View>
       </ScrollView>
-
-      {/* زرار الـ AI الجديد للطالب */}
-      <TouchableOpacity
-        style={s.fab}
-        onPress={() => router.push("/ai-chat" as any)}
-      >
-        <Ionicons name="sparkles" size={28} color="white" />
-      </TouchableOpacity>
-
     </SafeAreaView>
   );
 }
@@ -656,22 +635,4 @@ const s = StyleSheet.create({
   // Empty state
   emptyBox: { alignItems: "center", paddingVertical: 40 },
   emptyTxt: { color: "#94a3b8", fontSize: 15, marginTop: 12 },
-
-  // AI FAB Style
-  fab: {
-    position: 'absolute',
-    bottom: 30,
-    right: 25,
-    backgroundColor: '#1a3a8a',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-  }
 });
