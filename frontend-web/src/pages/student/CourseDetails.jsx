@@ -26,6 +26,59 @@ const CourseDetails = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // دالة تنسيق التاريخ المحسنة
+  const formatDate = (dateValue) => {
+    if (!dateValue) return 'Date not available';
+    
+    try {
+      let date;
+      
+      // دعم Timestamp من Firestore
+      if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+        date = dateValue.toDate();
+      }
+      // إذا كان string
+      else if (typeof dateValue === 'string') {
+        date = new Date(dateValue);
+        // إذا كان التاريخ غير صالح، حاول التحليل بتنسيق مختلف
+        if (isNaN(date.getTime())) {
+          // محاولة تحليل DD/MM/YYYY
+          const parts = dateValue.split('/');
+          if (parts.length === 3) {
+            date = new Date(parts[2], parts[1] - 1, parts[0]);
+          }
+        }
+      }
+      // إذا كان number (timestamp)
+      else if (typeof dateValue === 'number') {
+        date = new Date(dateValue);
+      }
+      // إذا كان Date object بالفعل
+      else if (dateValue instanceof Date) {
+        date = dateValue;
+      }
+      else {
+        return 'Invalid date format';
+      }
+      
+      // التحقق من صحة التاريخ
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      
+      // تنسيق التاريخ
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return 'Invalid date';
+    }
+  };
+
   // دالة تحميل البيانات المركزية (بدون إعادة تحميل الصفحة)
   const loadCourseDetails = useCallback(async (showRefreshIndicator = false) => {
     if (!user?.uid || !courseId) {
@@ -45,6 +98,16 @@ const CourseDetails = () => {
         getGradeDetails(user.uid, courseId),
         checkActiveSession(courseId)
       ]);
+
+      // معالجة التواريخ في المحاضرات عند جلب البيانات
+      if (courseData && courseData.lectures) {
+        courseData.lectures = courseData.lectures.map(lecture => ({
+          ...lecture,
+          // تحويل التاريخ إلى كائن Date إذا كان Timestamp
+          originalDate: lecture.date,
+          formattedDate: lecture.date ? formatDate(lecture.date) : null
+        }));
+      }
 
       // تحديث البيانات فقط إذا كانت مختلفة
       let hasChanges = false;
@@ -183,26 +246,6 @@ const CourseDetails = () => {
     }, 3000);
   };
 
-  // دالة مساعدة لتنسيق التاريخ بشكل صحيح
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Date not available';
-    
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return 'Invalid date';
-      }
-      return date.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    } catch (error) {
-      return 'Invalid date';
-    }
-  };
-
   if (loading) {
     return (
       <PageLayout>
@@ -235,12 +278,6 @@ const CourseDetails = () => {
 
   return (
     <PageLayout>
-      {/* مؤشر Auto Refresh في الزاوية */}
-   
-        
-    
-      
-
       {showLocationPermission && (
         <LocationPermission
           onLocationGranted={handleLocationGranted}
@@ -553,6 +590,9 @@ const CourseDetails = () => {
             statusBg = '#fee2e2';
           }
           
+          // استخدام التاريخ المنسق إذا كان موجوداً، وإلا استخدام formatDate
+          const displayDate = lec.formattedDate || formatDate(lec.date);
+          
           return (
             <div key={idx} className={styles.courseCard} style={{ 
               padding: '20px',
@@ -586,7 +626,7 @@ const CourseDetails = () => {
               </h4>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '14px' }}>
                 <span>📅</span> 
-                <span>{formatDate(lec.date)}</span>
+                <span>{displayDate}</span>
               </div>
               {lec.attendanceOpen === false && (
                 <div style={{

@@ -52,23 +52,20 @@ const StudentSidebar = () => {
         </NavLink>
       </nav>
 
-      {/* AI Assistant Button */}
       <button 
         onClick={() => setShowAIChat(true)} 
         style={aiAssistantButtonStyle}
         title="AI Assistant"
       >
-        🤖 Segma
+        🤖 AI Assistant
       </button>
 
-      {/* Logout Button */}
       <button onClick={handleLogout} style={logoutButtonStyle}>
         Logout
       </button>
 
-      {/* AI Chat Popup */}
       {showAIChat && (
-        <AIChatPopup onClose={() => setShowAIChat(false)} />
+        <AIChatPopup onClose={() => setShowAIChat(false)} userRole="student" />
       )}
     </div>
   );
