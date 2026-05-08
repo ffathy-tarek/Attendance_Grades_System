@@ -8,7 +8,7 @@ import ForgetPassword from "../pages/ForgetPassword.jsx";
 import RequestEmail from "../pages/RequestEmail.jsx";
 
 /* ===== Admin Pages ===== */
-import Layout from "../components/layout/layout.jsx";
+import Layout from "../components/layout/Layout.jsx";
 import AdminDashboard from "../pages/admin/AdminDashboard.jsx";
 import Students from "../pages/admin/Students.jsx";
 import Instructors from "../pages/admin/Instructors.jsx";
