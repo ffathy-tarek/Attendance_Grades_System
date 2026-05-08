@@ -32,23 +32,23 @@ const calculateGradeStatus = (total) => {
 const calculateAttendanceStatus = (presentCount, totalOccurred) => {
   // لو مفيش محاضرات اتعملت خالص
   if (totalOccurred === 0) {
-    return { 
-      status: "No lectures held yet", 
+    return {
+      status: "No lectures held yet",
       isAtRisk: false,
       absenceRate: 0,
       absences: 0,
-      warningLevel: null
+      warningLevel: null,
     };
   }
-  
+
   // القانون الجديد: (totalOccurred - presentCount) * 100 / 24
   const absences = totalOccurred - presentCount;
   const absencePct = (absences / TOTAL_LECTURES) * 100;
-  
+
   let status = "Regular";
   let isAtRisk = false;
   let warningLevel = null;
-  
+
   if (absences === 0) {
     status = "Perfect";
   } else if (absencePct > 25) {
@@ -64,13 +64,13 @@ const calculateAttendanceStatus = (presentCount, totalOccurred) => {
     isAtRisk = true;
     warningLevel = "first";
   }
-  
-  return { 
-    status, 
+
+  return {
+    status,
     isAtRisk,
     absenceRate: Math.round(absencePct),
     absences,
-    warningLevel
+    warningLevel,
   };
 };
 
@@ -83,7 +83,7 @@ async function fetchStudentData(uid) {
 
     // 2. Enrollments
     const enrollSnap = await getDocs(
-      query(collection(db, "enrollments"), where("studentId", "==", uid))
+      query(collection(db, "enrollments"), where("studentId", "==", uid)),
     );
     const courseIds = enrollSnap.docs.map((d) => d.data().courseId);
 
@@ -104,7 +104,7 @@ async function fetchStudentData(uid) {
 
     // 4. Grades
     const gradesSnap = await getDocs(
-      query(collection(db, "grades"), where("studentId", "==", uid))
+      query(collection(db, "grades"), where("studentId", "==", uid)),
     );
     const gradesByCourse = {};
     gradesSnap.forEach((doc) => {
@@ -115,7 +115,7 @@ async function fetchStudentData(uid) {
 
     // 5. Attendance (الحضور الفعلي)
     const attendSnap = await getDocs(
-      query(collection(db, "attendance"), where("studentId", "==", uid))
+      query(collection(db, "attendance"), where("studentId", "==", uid)),
     );
     const presentByCourse = {};
     attendSnap.forEach((doc) => {
@@ -140,16 +140,25 @@ async function fetchStudentData(uid) {
       const midterm = grades["Midterm"] || 0;
       const practical = grades["Practical"] || 0;
       const total = final + midterm + practical;
-      
+
       const presentCount = presentByCourse[course.id] || 0;
       const totalOccurred = sessionsByCourse[course.id] || 0;
-      const attendanceStatus = calculateAttendanceStatus(presentCount, totalOccurred);
-      
+      const attendanceStatus = calculateAttendanceStatus(
+        presentCount,
+        totalOccurred,
+      );
+
       return {
         courseName: course.name,
         courseCode: course.code,
         level: course.level,
-        grades: { final, midterm, practical, total, status: calculateGradeStatus(total) },
+        grades: {
+          final,
+          midterm,
+          practical,
+          total,
+          status: calculateGradeStatus(total),
+        },
         attendance: {
           present: presentCount,
           totalOccurred: totalOccurred,
@@ -160,15 +169,20 @@ async function fetchStudentData(uid) {
           isAtRisk: attendanceStatus.isAtRisk,
           warningLevel: attendanceStatus.warningLevel,
           hasLectures: totalOccurred > 0,
-        }
+        },
       };
     });
 
     // إحصائيات عامة
-    const atRiskCount = report.filter(r => r.attendance.isAtRisk && r.attendance.hasLectures).length;
-    const avgGrade = report.length > 0 
-      ? (report.reduce((s, r) => s + r.grades.total, 0) / report.length).toFixed(1)
-      : 0;
+    const atRiskCount = report.filter(
+      (r) => r.attendance.isAtRisk && r.attendance.hasLectures,
+    ).length;
+    const avgGrade =
+      report.length > 0
+        ? (
+            report.reduce((s, r) => s + r.grades.total, 0) / report.length
+          ).toFixed(1)
+        : 0;
 
     return {
       profile: {
@@ -185,8 +199,8 @@ async function fetchStudentData(uid) {
         avgGrade,
         atRiskCount,
         role: "student",
-        anyLecturesHeld: Object.keys(sessionsByCourse).length > 0
-      }
+        anyLecturesHeld: Object.keys(sessionsByCourse).length > 0,
+      },
     };
   } catch (error) {
     console.error("❌ Error fetching student data:", error);
@@ -207,7 +221,12 @@ async function fetchInstructorData(uid) {
     coursesSnap.forEach((doc) => {
       const c = doc.data();
       if (Array.isArray(c.instructorIds) && c.instructorIds.includes(uid)) {
-        teachingCourses.push({ id: doc.id, name: c.name || "Unknown", code: c.code || "---", level: c.level || "Unknown" });
+        teachingCourses.push({
+          id: doc.id,
+          name: c.name || "Unknown",
+          code: c.code || "---",
+          level: c.level || "Unknown",
+        });
       }
     });
 
@@ -233,7 +252,10 @@ async function fetchInstructorData(uid) {
     }
     enrollSnap.forEach((doc) => {
       const e = doc.data();
-      if (studentsByCourse[e.courseId] !== undefined && studentsMap[e.studentId]) {
+      if (
+        studentsByCourse[e.courseId] !== undefined &&
+        studentsMap[e.studentId]
+      ) {
         studentsByCourse[e.courseId].push({
           id: e.studentId,
           name: studentsMap[e.studentId].name,
@@ -248,7 +270,8 @@ async function fetchInstructorData(uid) {
     gradesSnap.forEach((doc) => {
       const g = doc.data();
       if (!gradesByCourse[g.courseId]) gradesByCourse[g.courseId] = {};
-      if (!gradesByCourse[g.courseId][g.studentId]) gradesByCourse[g.courseId][g.studentId] = {};
+      if (!gradesByCourse[g.courseId][g.studentId])
+        gradesByCourse[g.courseId][g.studentId] = {};
       gradesByCourse[g.courseId][g.studentId][g.assessmentName] = g.score || 0;
     });
 
@@ -257,9 +280,11 @@ async function fetchInstructorData(uid) {
     const attendanceByCourse = {};
     attendSnap.forEach((doc) => {
       const a = doc.data();
-      if (attendanceByCourse[a.courseId] === undefined) attendanceByCourse[a.courseId] = {};
+      if (attendanceByCourse[a.courseId] === undefined)
+        attendanceByCourse[a.courseId] = {};
       if (a.status === "present") {
-        attendanceByCourse[a.courseId][a.studentId] = (attendanceByCourse[a.courseId][a.studentId] || 0) + 1;
+        attendanceByCourse[a.courseId][a.studentId] =
+          (attendanceByCourse[a.courseId][a.studentId] || 0) + 1;
       }
     });
 
@@ -275,7 +300,7 @@ async function fetchInstructorData(uid) {
     const courseSummaries = teachingCourses.map((course) => {
       const students = studentsByCourse[course.id] || [];
       const totalLectures = sessionsByCourse[course.id] || 0;
-      
+
       const studentDetails = students.map((student) => {
         const present = attendanceByCourse[course.id]?.[student.id] || 0;
         const grades = gradesByCourse[course.id]?.[student.id] || {};
@@ -283,9 +308,12 @@ async function fetchInstructorData(uid) {
         const midterm = grades["Midterm"] || 0;
         const practical = grades["Practical"] || 0;
         const total = final + midterm + practical;
-        
-        const attendanceStatus = calculateAttendanceStatus(present, totalLectures);
-        
+
+        const attendanceStatus = calculateAttendanceStatus(
+          present,
+          totalLectures,
+        );
+
         return {
           name: student.name,
           code: student.code,
@@ -297,19 +325,29 @@ async function fetchInstructorData(uid) {
           attendanceStatus: attendanceStatus.status,
           isAtRisk: attendanceStatus.isAtRisk,
           warningLevel: attendanceStatus.warningLevel,
-          grades: { final, midterm, practical, total, status: calculateGradeStatus(total) },
+          grades: {
+            final,
+            midterm,
+            practical,
+            total,
+            status: calculateGradeStatus(total),
+          },
         };
       });
-      
-      const avgGrade = studentDetails.length > 0
-        ? (studentDetails.reduce((s, s2) => s + s2.grades.total, 0) / studentDetails.length).toFixed(1)
-        : 0;
-      
-      const atRiskCount = studentDetails.filter(s => s.isAtRisk).length;
-      
+
+      const avgGrade =
+        studentDetails.length > 0
+          ? (
+              studentDetails.reduce((s, s2) => s + s2.grades.total, 0) /
+              studentDetails.length
+            ).toFixed(1)
+          : 0;
+
+      const atRiskCount = studentDetails.filter((s) => s.isAtRisk).length;
+
       return {
         ...course,
-                totalLectures,
+        totalLectures,
         studentCount: students.length,
         avgGrade,
         atRiskCount,
@@ -318,7 +356,10 @@ async function fetchInstructorData(uid) {
       };
     });
 
-    const totalStudents = courseSummaries.reduce((s, c) => s + c.studentCount, 0);
+    const totalStudents = courseSummaries.reduce(
+      (s, c) => s + c.studentCount,
+      0,
+    );
     const totalAtRisk = courseSummaries.reduce((s, c) => s + c.atRiskCount, 0);
 
     return {
@@ -333,8 +374,8 @@ async function fetchInstructorData(uid) {
         totalStudents,
         totalAtRisk,
         role: "instructor",
-        anyLecturesHeld: Object.keys(sessionsByCourse).length > 0
-      }
+        anyLecturesHeld: Object.keys(sessionsByCourse).length > 0,
+      },
     };
   } catch (error) {
     console.error("❌ Error fetching instructor data:", error);
@@ -344,8 +385,9 @@ async function fetchInstructorData(uid) {
 
 // ─── استدعاء Groq API ────────────────────────────────────────────────────────
 async function callGroqAPI(systemPrompt, userMessage) {
-  const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-  
+  const apiKey =
+    import.meta.env.GROQ_API_KEY || import.meta.env.VITE_GROQ_API_KEY;
+
   if (!apiKey || apiKey === "") {
     console.log("⚠️ No Groq API key found");
     return null;
@@ -356,7 +398,7 @@ async function callGroqAPI(systemPrompt, userMessage) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: MODEL,
@@ -387,22 +429,24 @@ async function callGroqAPI(systemPrompt, userMessage) {
 function buildSystemPrompt(role, data) {
   if (role === "student") {
     const { profile, courses, stats } = data;
-    
-    const coursesSummary = courses.map(c => {
-      if (c.attendance.hasLectures) {
-        let warningEmoji = "";
-        if (c.attendance.warningLevel === "first") warningEmoji = "⚠️";
-        else if (c.attendance.warningLevel === "second") warningEmoji = "🔴";
-        else if (c.attendance.warningLevel === "denied") warningEmoji = "❌";
-        else warningEmoji = "✅";
-        
-        return `- ${c.courseName} (${c.courseCode}): Grade ${c.grades.total}% (${c.grades.status}), Attendance: ${c.attendance.present}/${c.attendance.totalOccurred} lectures held (${c.attendance.absences} absences, ${c.attendance.absenceRate}% of 24) - ${warningEmoji} ${c.attendance.status}`;
-      } else {
-        return `- ${c.courseName} (${c.courseCode}): Grade ${c.grades.total}% (${c.grades.status}), Attendance: ⚠️ No lectures have been held yet for this course.`;
-      }
-    }).join("\n");
-    
-    const warningMsg = stats.anyLecturesHeld 
+
+    const coursesSummary = courses
+      .map((c) => {
+        if (c.attendance.hasLectures) {
+          let warningEmoji = "";
+          if (c.attendance.warningLevel === "first") warningEmoji = "⚠️";
+          else if (c.attendance.warningLevel === "second") warningEmoji = "🔴";
+          else if (c.attendance.warningLevel === "denied") warningEmoji = "❌";
+          else warningEmoji = "✅";
+
+          return `- ${c.courseName} (${c.courseCode}): Grade ${c.grades.total}% (${c.grades.status}), Attendance: ${c.attendance.present}/${c.attendance.totalOccurred} lectures held (${c.attendance.absences} absences, ${c.attendance.absenceRate}% of 24) - ${warningEmoji} ${c.attendance.status}`;
+        } else {
+          return `- ${c.courseName} (${c.courseCode}): Grade ${c.grades.total}% (${c.grades.status}), Attendance: ⚠️ No lectures have been held yet for this course.`;
+        }
+      })
+      .join("\n");
+
+    const warningMsg = stats.anyLecturesHeld
       ? `⚠️ IMPORTANT ATTENDANCE RULES (Based on 24 total lectures per semester):
 - Absence rate = (number of lectures held - attendance) × 100 / 24
 - 15% to 24% absence → FIRST WARNING (إنذار أول)
@@ -413,7 +457,7 @@ Example: If 10 lectures were held and student attended 6 times:
 - Absences = 10 - 6 = 4
 - Absence rate = 4 × 100 / 24 = 16.6% → FIRST WARNING`
       : `⚠️ IMPORTANT: No lectures have been held yet in any course. Tell the student that attendance data will appear after instructors start holding lectures.`;
-    
+
     return `You are the Expert Academic Advisor for a Cairo University student.
 
 ## Student Profile
@@ -444,28 +488,35 @@ You are a GENERAL AI assistant. You can answer ANY question - not just about sch
 
 Now answer the user's question naturally.`;
   }
-  
+
   // Instructor mode
   const { profile, courses, stats } = data;
-  
-  const coursesSummary = courses.map(c => {
-    if (c.hasLectures) {
-      return `- ${c.name} (${c.code}): ${c.studentCount} students, ${c.totalLectures} lectures held so far, Avg Grade: ${c.avgGrade}%, At-Risk: ${c.atRiskCount} students (based on 24 total lectures)`;
-    } else {
-      return `- ${c.name} (${c.code}): ${c.studentCount} students, ⚠️ No lectures held yet for this course.`;
-    }
-  }).join("\n");
-  
-  const atRiskStudents = courses.flatMap(c => 
-    c.students.filter(s => s.isAtRisk && s.totalLectures > 0).map(s => {
-      let warningIcon = "";
-      if (s.warningLevel === "first") warningIcon = "⚠️ First Warning";
-      else if (s.warningLevel === "second") warningIcon = "🔴 Second Warning";
-      else if (s.warningLevel === "denied") warningIcon = "❌ Denied";
-      return `  • ${warningIcon} ${s.name} (${s.code}) - ${s.courseName}: ${s.absences}/${s.totalLectures} absences (${s.absenceRate}% of 24)`;
+
+  const coursesSummary = courses
+    .map((c) => {
+      if (c.hasLectures) {
+        return `- ${c.name} (${c.code}): ${c.studentCount} students, ${c.totalLectures} lectures held so far, Avg Grade: ${c.avgGrade}%, At-Risk: ${c.atRiskCount} students (based on 24 total lectures)`;
+      } else {
+        return `- ${c.name} (${c.code}): ${c.studentCount} students, ⚠️ No lectures held yet for this course.`;
+      }
     })
-  ).join("\n");
-  
+    .join("\n");
+
+  const atRiskStudents = courses
+    .flatMap((c) =>
+      c.students
+        .filter((s) => s.isAtRisk && s.totalLectures > 0)
+        .map((s) => {
+          let warningIcon = "";
+          if (s.warningLevel === "first") warningIcon = "⚠️ First Warning";
+          else if (s.warningLevel === "second")
+            warningIcon = "🔴 Second Warning";
+          else if (s.warningLevel === "denied") warningIcon = "❌ Denied";
+          return `  • ${warningIcon} ${s.name} (${s.code}) - ${s.courseName}: ${s.absences}/${s.totalLectures} absences (${s.absenceRate}% of 24)`;
+        }),
+    )
+    .join("\n");
+
   return `You are the Lead Academic Assistant for a Cairo University Instructor.
 
 ## Instructor Profile
@@ -505,35 +556,50 @@ Now answer the user's question naturally.`;
 // ─── Local Fallback (لو API مش شغال) ─────────────────────────────────────────
 function localFallback(msg, role, data) {
   const lower = msg.toLowerCase();
-  
+
   if (role === "student") {
     const { profile, courses, stats } = data;
-    
+
     // Profile
-    if (lower.includes("profile") || lower.includes("my info") || lower.includes("student id") || lower.includes("اسمي")) {
+    if (
+      lower.includes("profile") ||
+      lower.includes("my info") ||
+      lower.includes("student id") ||
+      lower.includes("اسمي")
+    ) {
       return `👤 **Your Profile**\n\n• Name: ${profile.name}\n• Student ID: ${profile.studentId}\n• Department: ${profile.department}\n• Level: ${profile.level}\n• Email: ${profile.email}\n• Phone: ${profile.phone}`;
     }
-    
+
     // Courses list
-    if (lower.includes("courses") || lower.includes("موادي") || lower.includes("my courses")) {
+    if (
+      lower.includes("courses") ||
+      lower.includes("موادي") ||
+      lower.includes("my courses")
+    ) {
       let reply = `📚 **Your Courses (${courses.length}):**\n\n`;
-      courses.forEach(c => {
+      courses.forEach((c) => {
         reply += `• **${c.courseName}** (${c.courseCode}) - Level ${c.level}\n`;
       });
       return reply;
     }
-    
+
     // Attendance
-    if (lower.includes("attendance") || lower.includes("غياب") || lower.includes("حضور") || lower.includes("absent")) {
+    if (
+      lower.includes("attendance") ||
+      lower.includes("غياب") ||
+      lower.includes("حضور") ||
+      lower.includes("absent")
+    ) {
       let hasAnyLectures = false;
-      let reply = "📊 **Your Attendance Summary (Based on 24 total lectures):**\n\n";
-      
-      courses.forEach(c => {
+      let reply =
+        "📊 **Your Attendance Summary (Based on 24 total lectures):**\n\n";
+
+      courses.forEach((c) => {
         if (c.attendance.hasLectures) {
           hasAnyLectures = true;
           let emoji = "📖";
           let warningText = "";
-          
+
           if (c.attendance.warningLevel === "first") {
             emoji = "⚠️";
             warningText = " - FIRST WARNING (إنذار أول)";
@@ -546,100 +612,132 @@ function localFallback(msg, role, data) {
           } else if (c.attendance.absenceRate === 0) {
             emoji = "✅";
           }
-          
+
           reply += `${emoji} **${c.courseName}**: ${c.attendance.present}/${c.attendance.totalOccurred} lectures held\n`;
           reply += `      📊 ${c.attendance.absences} absences → ${c.attendance.absenceRate}% of 24 total lectures${warningText}\n`;
         } else {
           reply += `📚 **${c.courseName}**: ⚠️ No lectures have been held yet for this course.\n`;
         }
       });
-      
+
       if (!hasAnyLectures) {
         return "📊 **No lectures have been held yet** in any of your courses.\n\n📌 Check back after your instructors start the semester! Attendance data will appear here once lectures are held.";
       }
-      
+
       if (stats.atRiskCount > 0) {
         reply += `\n🚨 **Warning:** You are at risk in ${stats.atRiskCount} course(s)! `;
         reply += `Remember: 15-24% = First Warning, 25% = Second Warning, >25% = Denied from exam.`;
       }
       return reply;
     }
-    
+
     // Grades
-    if (lower.includes("grade") || lower.includes("درجة") || lower.includes("grades") || lower.includes("نتيجة")) {
+    if (
+      lower.includes("grade") ||
+      lower.includes("درجة") ||
+      lower.includes("grades") ||
+      lower.includes("نتيجة")
+    ) {
       let reply = "🎓 **Your Grades:**\n\n";
       let hasGrades = false;
-      
-      courses.forEach(c => {
+
+      courses.forEach((c) => {
         if (c.grades.total > 0) {
           hasGrades = true;
-          const emoji = c.grades.total >= 85 ? "🌟" : c.grades.total >= 75 ? "👍" : c.grades.total >= 60 ? "📖" : "⚠️";
+          const emoji =
+            c.grades.total >= 85
+              ? "🌟"
+              : c.grades.total >= 75
+                ? "👍"
+                : c.grades.total >= 60
+                  ? "📖"
+                  : "⚠️";
           reply += `${emoji} **${c.courseName}**: ${c.grades.total}% (${c.grades.status})\n`;
           reply += `   📝 Final: ${c.grades.final}/60, Midterm: ${c.grades.midterm}/10, Practical: ${c.grades.practical}/30\n`;
         } else {
           reply += `📚 **${c.courseName}**: No grades available yet\n`;
         }
       });
-      
+
       if (stats.avgGrade > 0) {
         reply += `\n📊 **Average**: ${stats.avgGrade}%`;
       }
       return reply;
     }
-    
+
     // At risk
-    if (lower.includes("at risk") || lower.includes("warning") || lower.includes("إنذار") || lower.includes("محروم") || lower.includes("denied")) {
-      const atRiskCourses = courses.filter(c => c.attendance.isAtRisk && c.attendance.hasLectures);
+    if (
+      lower.includes("at risk") ||
+      lower.includes("warning") ||
+      lower.includes("إنذار") ||
+      lower.includes("محروم") ||
+      lower.includes("denied")
+    ) {
+      const atRiskCourses = courses.filter(
+        (c) => c.attendance.isAtRisk && c.attendance.hasLectures,
+      );
       if (atRiskCourses.length === 0) {
         return "✅ You are not at risk in any course! Keep it up!";
       }
       let reply = "🚨 **At-Risk Courses (Based on 24 total lectures):**\n\n";
-      atRiskCourses.forEach(c => {
+      atRiskCourses.forEach((c) => {
         let level = "";
-        if (c.attendance.warningLevel === "first") level = "⚠️ FIRST WARNING (15-24%)";
-        else if (c.attendance.warningLevel === "second") level = "🔴 SECOND WARNING (25%)";
-        else if (c.attendance.warningLevel === "denied") level = "❌ DENIED (>25%)";
+        if (c.attendance.warningLevel === "first")
+          level = "⚠️ FIRST WARNING (15-24%)";
+        else if (c.attendance.warningLevel === "second")
+          level = "🔴 SECOND WARNING (25%)";
+        else if (c.attendance.warningLevel === "denied")
+          level = "❌ DENIED (>25%)";
         reply += `${level}\n`;
         reply += `   **${c.courseName}**: ${c.attendance.absences} absences (${c.attendance.absenceRate}% of 24)\n`;
       });
       reply += "\n💡 Attend remaining lectures to avoid exam ban!";
       return reply;
     }
-    
+
     // Help
     if (lower.includes("help") || lower.includes("مساعدة")) {
       return `🔍 **What I can help you with:**\n\n📊 Attendance: "Show my attendance" / "Am I at risk?"\n🎓 Grades: "Show my grades" / "My average grade"\n📚 Courses: "List my courses" / "My courses"\n👤 Profile: "My profile" / "Student ID"\n💡 General: "Tell me a joke" / "Study tips"\n\n📌 Attendance Rules (based on 24 total lectures):\n• 15-24% absence → First Warning\n• 25% absence → Second Warning\n• >25% absence → Denied from exam`;
     }
-    
+
     // Default
     return `🤔 I didn't understand that. Try asking:\n• "Show my attendance"\n• "Show my grades"\n• "Am I at risk?"\n• "List my courses"\n• "Help" for more options`;
   }
-  
+
   // INSTRUCTOR MODE
   const { profile, courses, stats } = data;
-  
+
   // List students
-  if (lower.includes("list") || lower.includes("students") || lower.includes("طلاب") || lower.includes("student")) {
+  if (
+    lower.includes("list") ||
+    lower.includes("students") ||
+    lower.includes("طلاب") ||
+    lower.includes("student")
+  ) {
     // Find specific course
     let targetCourse = null;
     for (const c of courses) {
-      if (lower.includes(c.name.toLowerCase()) || (c.code && lower.includes(c.code.toLowerCase()))) {
+      if (
+        lower.includes(c.name.toLowerCase()) ||
+        (c.code && lower.includes(c.code.toLowerCase()))
+      ) {
         targetCourse = c;
         break;
       }
     }
-    
+
     if (targetCourse) {
-      if (targetCourse.studentCount === 0) return `📚 No students enrolled in **${targetCourse.name}** yet.`;
+      if (targetCourse.studentCount === 0)
+        return `📚 No students enrolled in **${targetCourse.name}** yet.`;
       if (!targetCourse.hasLectures) {
         let reply = `📚 **${targetCourse.name}** - No lectures held yet.\n\n👨‍🎓 **Students enrolled (${targetCourse.studentCount}):**\n\n`;
         targetCourse.students.forEach((s, i) => {
-          reply += `${i+1}. **${s.name}** (${s.code})\n`;
+          reply += `${i + 1}. **${s.name}** (${s.code})\n`;
           reply += `      📊 No attendance data yet (no lectures held)\n`;
         });
         return reply;
       }
-      
+
       let reply = `👨‍🎓 **Students in ${targetCourse.name} (${targetCourse.studentCount}):**\n\n`;
       targetCourse.students.forEach((s, i) => {
         let icon = "📖";
@@ -656,17 +754,17 @@ function localFallback(msg, role, data) {
         } else if (s.absenceRate === 0 && s.totalLectures > 0) {
           icon = "✅";
         }
-        
-        reply += `${i+1}. ${icon} **${s.name}** (${s.code})${warningText}\n`;
+
+        reply += `${i + 1}. ${icon} **${s.name}** (${s.code})${warningText}\n`;
         reply += `      📊 Attendance: ${s.present}/${s.totalLectures} held (${s.absences} absences → ${s.absenceRate}% of 24)\n`;
         reply += `      🎓 Grade: ${s.grades.total}% (${s.grades.status})\n`;
       });
       return reply;
     }
-    
+
     // All students summary
     let reply = `👨‍🎓 **All Students Summary (${stats.totalStudents} total):**\n\n`;
-    courses.forEach(c => {
+    courses.forEach((c) => {
       if (c.studentCount > 0) {
         reply += `📚 **${c.name}** - ${c.studentCount} students`;
         if (c.hasLectures) {
@@ -674,23 +772,32 @@ function localFallback(msg, role, data) {
         } else {
           reply += `, ⚠️ No lectures held yet\n`;
         }
-        c.students.slice(0, 5).forEach(s => {
+        c.students.slice(0, 5).forEach((s) => {
           let icon = s.isAtRisk ? "⚠️" : "✅";
           reply += `   ${icon} ${s.name} (${s.code})\n`;
         });
-        if (c.studentCount > 5) reply += `   ... and ${c.studentCount - 5} more\n`;
+        if (c.studentCount > 5)
+          reply += `   ... and ${c.studentCount - 5} more\n`;
         reply += "\n";
       }
     });
     return reply || "No students enrolled in any course.";
   }
-  
+
   // At-risk students
-  if (lower.includes("at risk") || lower.includes("warning") || lower.includes("محروم") || lower.includes("denied") || lower.includes("انذار")) {
-    const atRisk = courses.flatMap(c => c.students.filter(s => s.isAtRisk));
-    if (atRisk.length === 0) return "✅ No at-risk students across your courses.";
-    let reply = "🚨 **At-Risk Students (>15% absence of 24 total lectures):**\n\n";
-    atRisk.forEach(s => {
+  if (
+    lower.includes("at risk") ||
+    lower.includes("warning") ||
+    lower.includes("محروم") ||
+    lower.includes("denied") ||
+    lower.includes("انذار")
+  ) {
+    const atRisk = courses.flatMap((c) => c.students.filter((s) => s.isAtRisk));
+    if (atRisk.length === 0)
+      return "✅ No at-risk students across your courses.";
+    let reply =
+      "🚨 **At-Risk Students (>15% absence of 24 total lectures):**\n\n";
+    atRisk.forEach((s) => {
       let level = "";
       if (s.warningLevel === "first") level = "⚠️ First Warning (15-24%)";
       else if (s.warningLevel === "second") level = "🔴 Second Warning (25%)";
@@ -700,15 +807,20 @@ function localFallback(msg, role, data) {
     });
     return reply;
   }
-  
+
   // Teaching summary
-  if (lower.includes("summary") || lower.includes("overview") || lower.includes("ملخص") || lower.includes("dashboard")) {
+  if (
+    lower.includes("summary") ||
+    lower.includes("overview") ||
+    lower.includes("ملخص") ||
+    lower.includes("dashboard")
+  ) {
     let reply = `📊 **Teaching Summary for ${profile.name}**\n\n`;
     reply += `• Total Courses: ${stats.totalCourses}\n`;
     reply += `• Total Students: ${stats.totalStudents}\n`;
     reply += `• At-Risk Students: ${stats.totalAtRisk}\n\n`;
     reply += `📚 **Course Breakdown:**\n`;
-    courses.forEach(c => {
+    courses.forEach((c) => {
       reply += `\n**${c.name}** (${c.code})\n`;
       reply += `  • Students: ${c.studentCount}\n`;
       if (c.hasLectures) {
@@ -721,11 +833,15 @@ function localFallback(msg, role, data) {
     });
     return reply;
   }
-  
+
   // Courses list
-  if (lower.includes("course") || lower.includes("subject") || lower.includes("مادة")) {
+  if (
+    lower.includes("course") ||
+    lower.includes("subject") ||
+    lower.includes("مادة")
+  ) {
     let reply = `📚 **Your Courses (${stats.totalCourses}):**\n\n`;
-    courses.forEach(c => {
+    courses.forEach((c) => {
       reply += `• **${c.name}** (${c.code}) - ${c.studentCount} students`;
       if (c.hasLectures) {
         reply += `, ${c.totalLectures} lectures held\n`;
@@ -735,12 +851,12 @@ function localFallback(msg, role, data) {
     });
     return reply;
   }
-  
+
   // Help
   if (lower.includes("help") || lower.includes("مساعدة")) {
     return `🔍 **What I can help you with:**\n\n📚 **Courses**\n• "Show my courses"\n• "How many students in Mechanical 1?"\n\n👨‍🎓 **Students**\n• "List students in Algorithm"\n• "Show at-risk students"\n• "All students"\n\n📊 **Overview**\n• "Teaching summary"\n• "Course overview"\n\n📌 Attendance Rules (for your reference):\n• 15-24% absence → First Warning\n• 25% absence → Second Warning\n• >25% absence → Denied from exam`;
   }
-  
+
   // Default
   return `🤔 I didn't understand that. Try asking:\n• "List students in Mechanical 1"\n• "Show at-risk students"\n• "Teaching summary"\n• "My courses"\n• "Help" for more options`;
 }
@@ -763,17 +879,18 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
         setLoadingData(false);
         return;
       }
-      
+
       try {
         setLoadingData(true);
-        const data = userRole === "student" 
-          ? await fetchStudentData(user.uid)
-          : await fetchInstructorData(user.uid);
+        const data =
+          userRole === "student"
+            ? await fetchStudentData(user.uid)
+            : await fetchInstructorData(user.uid);
         setAppData(data);
-        
+
         // رسالة ترحيب
         const firstName = data.profile.name.split(" ")[0];
-        
+
         let welcome = "";
         if (userRole === "student") {
           if (!data.stats.anyLecturesHeld) {
@@ -788,16 +905,23 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
             welcome = `Hello Professor ${firstName}! 👋\n\nI'm your AI teaching assistant. You have ${data.stats.totalCourses} course(s) with ${data.stats.totalStudents} student(s).\n\n📌 **Ask me about:**\n• 👨‍🎓 "List students in Mechanical 1"\n• ⚠️ "Who is at risk?"\n• 📊 "Teaching summary"\n• 🎓 "Show grades in Algorithm"\n\n📌 **Attendance Rules (based on 24 total lectures):**\n• 15-24% absence → First Warning\n• 25% absence → Second Warning\n• >25% absence → Denied from exam`;
           }
         }
-        
+
         setMessages([{ id: "1", role: "assistant", content: welcome }]);
       } catch (error) {
         console.error("Data loading error:", error);
-        setMessages([{ id: "1", role: "assistant", content: "⚠️ Error loading your data. Please refresh and try again." }]);
+        setMessages([
+          {
+            id: "1",
+            role: "assistant",
+            content:
+              "⚠️ Error loading your data. Please refresh and try again.",
+          },
+        ]);
       } finally {
         setLoadingData(false);
       }
     };
-    
+
     loadData();
   }, [user, userRole]);
 
@@ -808,26 +932,43 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
 
   const handleSend = async () => {
     if (!input.trim() || loading || !appData) return;
-    
+
     const userMessage = input.trim();
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: userMessage }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: "user", content: userMessage },
+    ]);
     setInput("");
     setLoading(true);
-    
+
     try {
       const systemPrompt = buildSystemPrompt(userRole, appData);
       let aiResponse = await callGroqAPI(systemPrompt, userMessage);
-      
+
       if (!aiResponse) {
         // Fallback to local
         aiResponse = localFallback(userMessage, userRole, appData);
       }
-      
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: aiResponse }]);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: aiResponse,
+        },
+      ]);
     } catch (error) {
       console.error("Error:", error);
       const fallback = localFallback(userMessage, userRole, appData);
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: fallback }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: fallback,
+        },
+      ]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -841,7 +982,12 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
     return createPortal(
       <div style={styles.overlay}>
         <div style={styles.container}>
-          <div style={{ ...styles.header, background: `linear-gradient(135deg, ${roleColor} 0%, ${roleColor}bb 100%)` }}>
+          <div
+            style={{
+              ...styles.header,
+              background: `linear-gradient(135deg, ${roleColor} 0%, ${roleColor}bb 100%)`,
+            }}
+          >
             <div style={styles.headerLeft}>
               <div style={styles.avatar}>{roleIcon}</div>
               <div>
@@ -849,7 +995,9 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
                 <p style={styles.subtitle}>Loading...</p>
               </div>
             </div>
-            <button onClick={onClose} style={styles.closeBtn}>✕</button>
+            <button onClick={onClose} style={styles.closeBtn}>
+              ✕
+            </button>
           </div>
           <div style={styles.loadingCenter}>
             <div style={styles.spinner} />
@@ -857,7 +1005,7 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
           </div>
         </div>
       </div>,
-      document.body
+      document.body,
     );
   }
 
@@ -865,7 +1013,12 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.container} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div style={{ ...styles.header, background: `linear-gradient(135deg, ${roleColor} 0%, ${roleColor}bb 100%)` }}>
+        <div
+          style={{
+            ...styles.header,
+            background: `linear-gradient(135deg, ${roleColor} 0%, ${roleColor}bb 100%)`,
+          }}
+        >
           <div style={styles.headerLeft}>
             <div style={styles.avatar}>{roleIcon}</div>
             <div>
@@ -873,7 +1026,9 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
               <p style={styles.subtitle}>{loading ? "Typing..." : "Ready"}</p>
             </div>
           </div>
-          <button onClick={onClose} style={styles.closeBtn}>✕</button>
+          <button onClick={onClose} style={styles.closeBtn}>
+            ✕
+          </button>
         </div>
 
         {/* Messages */}
@@ -949,7 +1104,7 @@ const AIChatPopup = ({ onClose, userRole = "student" }) => {
         }
       `}</style>
     </div>,
-    document.body
+    document.body,
   );
 };
 
