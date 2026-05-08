@@ -1,4 +1,4 @@
-// ==================== StudentDashboard.jsx (معدل بالكامل) ====================
+// ==================== StudentDashboard.jsx ====================
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import PageLayout from '../../components/student/PageLayout';
@@ -31,7 +31,6 @@ const StudentDashboard = () => {
   const [pendingAttendance, setPendingAttendance] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   
-  // Refs for preventing multiple loads and caching
   const isLoadingRef = useRef(false);
   const debounceTimerRef = useRef(null);
   const lastLoadTimeRef = useRef(0);
@@ -40,9 +39,7 @@ const StudentDashboard = () => {
   const loadDashboardData = useCallback(async (force = false) => {
     if (!user?.uid) return;
     
-    // Check cache (cache valid for 30 seconds)
-    const now = Date.now();
-    if (!force && cacheRef.current.courses && (now - cacheRef.current.timestamp) < 30000) {
+    if (!force && cacheRef.current.courses && (Date.now() - cacheRef.current.timestamp) < 30000) {
       console.log('📦 Using cached data');
       setCourses(cacheRef.current.courses);
       setStats(cacheRef.current.stats);
@@ -52,11 +49,9 @@ const StudentDashboard = () => {
       return;
     }
     
-    // Prevent multiple simultaneous loads
     if (isLoadingRef.current) return;
     
-    // Prevent rapid consecutive loads (2 seconds minimum between loads)
-    if (!force && (now - lastLoadTimeRef.current) < 2000) {
+    if (!force && (Date.now() - lastLoadTimeRef.current) < 2000) {
       console.log('⏳ Skipping load, too soon since last load');
       return;
     }
@@ -64,7 +59,7 @@ const StudentDashboard = () => {
     isLoadingRef.current = true;
     if (!force) setLoading(true);
     setIsRefreshing(true);
-    lastLoadTimeRef.current = now;
+    lastLoadTimeRef.current = Date.now();
     
     try {
       console.log('🔄 Loading dashboard data from server...');
@@ -73,7 +68,6 @@ const StudentDashboard = () => {
         getTotalStats(user.uid)
       ]);
 
-      // Save to cache
       cacheRef.current = {
         courses: coursesData || [],
         stats: statsData || {
@@ -86,7 +80,7 @@ const StudentDashboard = () => {
           totalAbsences: 0,
           averageGrade: 0
         },
-        timestamp: now
+        timestamp: Date.now()
       };
       
       setCourses(coursesData || []);
@@ -106,7 +100,6 @@ const StudentDashboard = () => {
     loadDashboardData(true);
   };
 
-  // Real-time listener with debounce - only ONE listener
   useEffect(() => {
     if (!user?.uid) {
       setLoading(false);
@@ -115,10 +108,8 @@ const StudentDashboard = () => {
 
     console.log('🎧 Setting up single real-time listener for UID:', user.uid);
     
-    // Initial load
     loadDashboardData(true);
     
-    // Single listener for attendance only (most important for real-time updates)
     const attendanceRef = collection(db, 'attendance');
     const attendanceQuery = query(
       attendanceRef,
@@ -126,7 +117,6 @@ const StudentDashboard = () => {
     );
     
     const unsubscribeAttendance = onSnapshot(attendanceQuery, () => {
-      // Debounce to prevent multiple rapid updates
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
@@ -137,7 +127,6 @@ const StudentDashboard = () => {
       }, 1000);
     });
     
-    // Cleanup function
     return () => {
       console.log('🔴 Dashboard: Cleaning up listeners');
       if (debounceTimerRef.current) {
@@ -185,7 +174,6 @@ const StudentDashboard = () => {
     
     setAttendanceLoading(prev => ({ ...prev, [course.id]: false }));
     
-    // Auto refresh after attendance to show updated data
     setTimeout(() => {
       loadDashboardData(true);
     }, 500);
@@ -222,7 +210,6 @@ const StudentDashboard = () => {
       setAttendanceLoading(prev => ({ ...prev, [pendingAttendance.id]: false }));
       setPendingAttendance(null);
       
-      // Auto refresh after attendance to show updated data
       setTimeout(() => {
         loadDashboardData(true);
       }, 500);
@@ -270,8 +257,10 @@ const StudentDashboard = () => {
     );
   }
 
-  const totalAbsencePercent = stats.totalLectures > 0 
-    ? ((stats.totalAbsences / stats.totalLectures) * 100).toFixed(1)
+  // ✅ تعديل حساب نسبة الغياب الكلية على أساس 24 لكل مادة
+  const totalPossibleAbsences = 24 * stats.totalCourses;
+  const totalAbsencePercent = totalPossibleAbsences > 0 
+    ? ((stats.totalAbsences / totalPossibleAbsences) * 100).toFixed(1)
     : 0;
 
   return (

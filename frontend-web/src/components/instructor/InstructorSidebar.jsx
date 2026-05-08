@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from "react-router-dom";
 import { auth } from "../../firebase"; 
 import { signOut } from "firebase/auth";
+import AIChatPopup from "../AIChatPopup";
 
 const InstructorSidebar = () => {
   const navigate = useNavigate();
+  const [showAIChat, setShowAIChat] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -54,9 +56,21 @@ const InstructorSidebar = () => {
         </NavLink>
       </nav>
 
+      <button 
+        onClick={() => setShowAIChat(true)} 
+        style={aiAssistantButtonStyle}
+        title="AI Assistant"
+      >
+        🤖 AI Assistant
+      </button>
+
       <button onClick={handleLogout} style={logoutButtonStyle}>
         Logout
       </button>
+
+      {showAIChat && (
+        <AIChatPopup onClose={() => setShowAIChat(false)} userRole="instructor" />
+      )}
     </div>
   );
 };
@@ -89,6 +103,24 @@ const linkStyle = ({ isActive }) => ({
   transition: "background-color 0.2s",
   cursor: "pointer",
 });
+
+const aiAssistantButtonStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  padding: "12px",
+  marginBottom: "12px",
+  borderRadius: "12px",
+  width: "100%",
+  border: "none",
+  backgroundColor: "#8b5cf6",
+  color: "white",
+  cursor: "pointer",
+  fontSize: "16px",
+  fontWeight: "500",
+  transition: "all 0.2s",
+};
 
 const logoutButtonStyle = {
   padding: "12px",

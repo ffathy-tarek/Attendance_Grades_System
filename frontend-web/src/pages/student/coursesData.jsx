@@ -1,4 +1,4 @@
-// ==================== coursesData.jsx (الكود الأصلي الصحيح) ====================
+// ==================== coursesData.jsx ====================
 
 import { collection, query, where, getDocs, doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { db } from '../../firebase';
@@ -235,6 +235,7 @@ export const openMapToLocation = (lat, lng) => {
 
 // ==================== Core Attendance Functions ====================
 
+// ✅ المعدل: نسبة الغياب = عدد مرات الغياب / 24
 export const getAttendanceData = async (studentId) => {
   try {
     if (!studentId) return [];
@@ -281,25 +282,25 @@ export const getAttendanceData = async (studentId) => {
         );
         const sessionsSnapshot = await getDocs(sessionsQuery);
         
-        const TOTAL_TERM_LECTURES = 24;
-        const actualSessions = sessionsSnapshot.size;
+        const totalLectures = sessionsSnapshot.size;
         const presentCount = presentByCourse[courseId] || 0;
-        const absencesCount = actualSessions - presentCount;
+        const absencesCount = totalLectures - presentCount;
         
-        const absencePercent = ((absencesCount / TOTAL_TERM_LECTURES) * 100).toFixed(1);
+        // ✅ التعديل هنا: نسبة الغياب = (عدد مرات الغياب / 24) * 100
+        const absencePercent = ((absencesCount / 24) * 100).toFixed(1);
         
         let status = 'Regular';
         const absenceValue = parseFloat(absencePercent);
         if (absencesCount === 0) status = 'Perfect';
-        else if (absenceValue >= 25) status = 'Denied';
-        else if (absenceValue >= 20) status = 'Second warning';
-        else if (absenceValue >= 10) status = 'First warning';
+        else if (absenceValue > 25) status = 'Denied';
+        else if (absenceValue === 25) status = 'Second warning';
+        else if (absenceValue >= 15) status = 'First warning';
         
         coursesList.push({
           id: courseId,
           subject: courseData.name || 'Unknown Course',
           present: presentCount,
-          total: TOTAL_TERM_LECTURES,
+          total: totalLectures,
           absences: absencesCount,
           absencePercent: parseFloat(absencePercent),
           status: status,
@@ -340,6 +341,7 @@ export const getCoursesForCoursesPage = async (studentId) => {
   }));
 };
 
+// ✅ المعدل: حساب النسب الكلية على أساس 24 لكل مادة
 export const getTotalStats = async (studentId) => {
   const data = await getAttendanceData(studentId);
   
@@ -360,8 +362,10 @@ export const getTotalStats = async (studentId) => {
   const totalPresent = data.reduce((acc, course) => acc + course.present, 0);
   const totalAbsences = data.reduce((acc, course) => acc + course.absences, 0);
   
-  const averageAbsence = totalLectures > 0 
-    ? ((totalAbsences / totalLectures) * 100).toFixed(1) 
+  // ✅ التعديل هنا: النسبة الكلية = (إجمالي الغيابات / (24 * عدد المواد)) * 100
+  const totalPossibleAbsences = 24 * data.length;
+  const averageAbsence = totalPossibleAbsences > 0 
+    ? ((totalAbsences / totalPossibleAbsences) * 100).toFixed(1) 
     : 0;
   
   const perfectAttendance = data.filter(c => c.absences === 0).length;
