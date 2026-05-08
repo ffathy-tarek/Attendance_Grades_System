@@ -10,7 +10,6 @@
     { "source": "/forget-password", "destination": "/index.html" },
     { "source": "/request-email", "destination": "/index.html" },
     { "source": "/reset-password", "destination": "/index.html" },
-    { "source": "/404", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

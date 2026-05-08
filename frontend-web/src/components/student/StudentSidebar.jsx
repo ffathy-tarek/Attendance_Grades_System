@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { auth } from "../../firebase"; 
+import { auth } from "../../firebase";
 import { signOut } from "firebase/auth";
 import AIChatPopup from "../AIChatPopup";
 
@@ -52,8 +52,8 @@ const StudentSidebar = () => {
         </NavLink>
       </nav>
 
-      <button 
-        onClick={() => setShowAIChat(true)} 
+      <button
+        onClick={() => setShowAIChat(true)}
         style={aiAssistantButtonStyle}
         title="AI Assistant"
       >
