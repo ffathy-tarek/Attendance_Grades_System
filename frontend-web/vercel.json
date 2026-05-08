@@ -1,6 +1,30 @@
 {
   "rewrites": [
     {
+      "source": "/student",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/student/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/instructor",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/instructor/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
