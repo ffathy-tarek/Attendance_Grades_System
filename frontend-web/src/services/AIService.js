@@ -9,14 +9,14 @@ class AIService {
   }
 
   init() {
-    const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-    
+    const apiKey =
+      import.meta.env.GROQ_API_KEY || import.meta.env.VITE_GROQ_API_KEY;
     if (apiKey && apiKey !== "" && apiKey !== "YOUR_GROQ_API_KEY_HERE") {
       try {
         this.client = new OpenAI({
           baseURL: "https://api.groq.com/openai/v1",
           apiKey: apiKey,
-          dangerouslyAllowBrowser: true
+          dangerouslyAllowBrowser: true,
         });
         this.isEnabled = true;
         console.log("✅ Groq AI initialized successfully!");
@@ -50,14 +50,21 @@ Here is the student's personal data:
 - Academic Level: ${studentContext.profile?.academicYear || "Unknown"}
 
 Here are the student's courses with attendance:
-${studentContext.attendance?.map(c => 
-  `- ${c.subject}: Attended ${c.present}/${c.total} lectures (${c.absencePercent}% absences) - Status: ${c.status}`
-).join("\n") || "No courses enrolled"}
+${
+  studentContext.attendance
+    ?.map(
+      (c) =>
+        `- ${c.subject}: Attended ${c.present}/${c.total} lectures (${c.absencePercent}% absences) - Status: ${c.status}`,
+    )
+    .join("\n") || "No courses enrolled"
+}
 
 Here are the student's grades:
-${studentContext.grades?.map(g => 
-  `- ${g.subject}: ${g.total}% (${g.status})`
-).join("\n") || "No grades available yet"}
+${
+  studentContext.grades
+    ?.map((g) => `- ${g.subject}: ${g.total}% (${g.status})`)
+    .join("\n") || "No grades available yet"
+}
 
 Instructions:
 1. Respond in the SAME language as the user's question (Arabic or English)
@@ -73,7 +80,7 @@ User question: ${prompt}`;
         model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: prompt }
+          { role: "user", content: prompt },
         ],
         temperature: 0.7,
         max_tokens: 1000,
