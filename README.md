@@ -21,3 +21,8 @@ The system supports:
 - Grade management (Midterm, Final, Practical, Attendance mark)
 
 - JWT authentication with role-based access control
+
+
+--
+Download / View App: https://expo.dev/artifacts/eas/sXmos4YPNNWhauuWHAQuh6.apk
+Visit Website: https://attendance-wep-system.vercel.app/
